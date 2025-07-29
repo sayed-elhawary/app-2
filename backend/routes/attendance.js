@@ -66,31 +66,39 @@ function calculateStatus(date, workingDays, shiftType) {
   return status;
 }
 
-// دالة لحساب دقائق التأخير
+// دالة لحساب دقائق التأخير (معدلة للشيفت الإداري)
 function calculateLateMinutes(user, checkIn) {
-  if (!checkIn) return 0;
+  if (!checkIn || user.shiftType !== 'administrative') return 0;
+
   const [checkInHours, checkInMinutes] = checkIn.split(':').map(Number);
   const checkInTime = checkInHours * 60 + checkInMinutes;
-  const shiftStart = user.shiftType === 'administrative' ? 8 * 60 + 30 : 7 * 60; // 08:30 للإداري، 07:00 لغيره
-  const allowanceEnd = user.shiftType === 'administrative' ? 9 * 60 + 15 : shiftStart; // 09:15 للإداري
-  const lateMinutes = checkInTime > allowanceEnd ? checkInTime - shiftStart : 0;
+  const shiftStart = 8 * 60 + 30; // 08:30
+  const allowanceEnd = 9 * 60 + 15; // 09:15
+
+  if (checkInTime <= allowanceEnd) {
+    return 0;
+  }
+
+  const lateMinutes = checkInTime - shiftStart;
   console.log(`Calculated late minutes: ${lateMinutes} for checkIn: ${checkIn}, shiftStart: ${shiftStart}, allowanceEnd: ${allowanceEnd}`);
   return lateMinutes;
 }
 
-// دالة لحساب الأيام المستقطعة
+// دالة لحساب الأيام المستقطعة (معدلة لتجنب خصم يوم كامل عند بصمة واحدة)
 function calculateDeductedDays(excessLateMinutes, checkIn) {
-  if (!checkIn) return 1; // غياب كامل لو مفيش checkIn
+  if (!checkIn) return 0; // لا خصم إذا كانت هناك بصمة واحدة
+  if (excessLateMinutes === 0) return 0;
+
   const [checkInHours, checkInMinutes] = checkIn.split(':').map(Number);
   const checkInTime = checkInHours * 60 + checkInMinutes;
+
   let deductedDays = 0;
-  if (excessLateMinutes === 0) return 0;
-  if (checkInTime >= 16 * 60 + 1 && checkInTime <= 17 * 60 + 20) {
-    deductedDays = 0.25; // من 16:01 إلى 17:20: ربع يوم
+  if (checkInTime >= 9 * 60 + 16 && checkInTime <= 11 * 60) {
+    deductedDays = 0.25; // من 09:16 إلى 11:00: ربع يوم
   } else if (checkInTime >= 11 * 60 + 1 && checkInTime <= 16 * 60) {
     deductedDays = 0.5; // من 11:01 إلى 16:00: نصف يوم
-  } else if (checkInTime >= 9 * 60 + 16 && checkInTime <= 11 * 60) {
-    deductedDays = 0.25; // من 09:16 إلى 11:00: ربع يوم
+  } else if (checkInTime >= 16 * 60 + 1 && checkInTime <= 17 * 60 + 20) {
+    deductedDays = 0.25; // من 16:01 إلى 17:20: ربع يوم
   } else if (checkInTime > 17 * 60 + 20) {
     deductedDays = 1; // بعد 17:20: يوم كامل
   }
@@ -98,7 +106,7 @@ function calculateDeductedDays(excessLateMinutes, checkIn) {
   return deductedDays;
 }
 
-// دالة لحساب ساعات العمل والساعات الإضافية (معدلة لحل مشكلة التعويضات)
+// دالة لحساب ساعات العمل والساعات الإضافية (معدلة لتسجيل 9 ساعات عند بصمة واحدة)
 function calculateWorkHours(record, user, dailyRate, regularHourRate) {
   let workHours = 0;
   let extraHours = 0;
@@ -107,68 +115,78 @@ function calculateWorkHours(record, user, dailyRate, regularHourRate) {
   let calculatedWorkDays = (record.checkIn || record.checkOut) ? 1 : 0;
   let fridayBonus = 0;
 
-  if (record.checkIn && record.checkOut && record.status === 'present') {
-    const checkInDate = new Date(record.date);
-    checkInDate.setHours(parseInt(record.checkIn.split(':')[0]), parseInt(record.checkIn.split(':')[1]));
-    let checkOutDate = new Date(record.date);
-    checkOutDate.setHours(parseInt(record.checkOut.split(':')[0]), parseInt(record.checkOut.split(':')[1]));
+  if (record.checkIn || record.checkOut) {
+    // إذا كانت هناك بصمة واحدة أو اثنتين
+    if (user.shiftType === 'administrative') {
+      workHours = NORMAL_WORK_HOURS; // 9 ساعات للشيفت الإداري
+      extraHours = 0;
+      extraHoursCompensation = 0;
+      hoursDeduction = 0;
+      calculatedWorkDays = 1;
+    } else if (record.checkIn && record.checkOut && record.status === 'present') {
+      const checkInDate = new Date(record.date);
+      checkInDate.setHours(parseInt(record.checkIn.split(':')[0]), parseInt(record.checkIn.split(':')[1]));
+      let checkOutDate = new Date(record.date);
+      checkOutDate.setHours(parseInt(record.checkOut.split(':')[0]), parseInt(record.checkOut.split(':')[1]));
 
-    if (checkOutDate < checkInDate) {
-      checkOutDate.setDate(checkOutDate.getDate() + 1);
-    }
-
-    workHours = (checkOutDate - checkInDate) / (1000 * 60 * 60);
-    workHours = Math.max(0, workHours);
-
-    if (user.shiftType === '24/24') {
-      if (workHours >= NORMAL_WORK_HOURS) {
-        extraHours = workHours - NORMAL_WORK_HOURS;
-        extraHoursCompensation = extraHours * regularHourRate; // حساب التعويض بسعر الساعة العادية
-        calculatedWorkDays = 1;
-        hoursDeduction = 0;
-      } else {
-        extraHours = 0;
-        extraHoursCompensation = 0;
-        calculatedWorkDays = 1;
-        hoursDeduction = NORMAL_WORK_HOURS - workHours;
+      if (checkOutDate < checkInDate) {
+        checkOutDate.setDate(checkOutDate.getDate() + 1);
       }
-    } else if (user.shiftType === 'dayStation' || user.shiftType === 'nightStation') {
-      const isFriday = record.date.getDay() === 5;
-      const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
-      if (isFriday) {
-        workHours *= 2;
-        extraHours = workHours / 2;
-        extraHoursCompensation = extraHours * extraHourRate; // تعويض الساعات الإضافية يوم الجمعة بضعف السعر
-        calculatedWorkDays = 2;
-        hoursDeduction = 0;
-        if (record.checkIn) {
-          fridayBonus = dailyRate;
+
+      workHours = (checkOutDate - checkInDate) / (1000 * 60 * 60);
+      workHours = Math.max(0, workHours);
+
+      if (user.shiftType === '24/24') {
+        if (workHours >= NORMAL_WORK_HOURS) {
+          extraHours = workHours - NORMAL_WORK_HOURS;
+          extraHoursCompensation = extraHours * regularHourRate;
+          calculatedWorkDays = 1;
+          hoursDeduction = 0;
+        } else {
+          extraHours = 0;
+          extraHoursCompensation = 0;
+          calculatedWorkDays = 1;
+          hoursDeduction = NORMAL_WORK_HOURS - workHours;
         }
-      } else if (workHours < NORMAL_WORK_HOURS) {
-        hoursDeduction = NORMAL_WORK_HOURS - workHours;
-        extraHours = 0;
-        extraHoursCompensation = 0;
-        calculatedWorkDays = 1;
-      } else if (workHours > NORMAL_WORK_HOURS) {
-        extraHours = workHours - NORMAL_WORK_HOURS;
-        extraHoursCompensation = extraHours * extraHourRate; // تعويض الساعات الإضافية بسعر الساعة العادية
-        calculatedWorkDays = 1;
-        hoursDeduction = 0;
-      } else {
-        extraHours = 0;
-        extraHoursCompensation = 0;
-        calculatedWorkDays = 1;
-        hoursDeduction = 0;
+      } else if (user.shiftType === 'dayStation' || user.shiftType === 'nightStation') {
+        const isFriday = record.date.getDay() === 5;
+        const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
+        if (isFriday) {
+          workHours *= 2;
+          extraHours = workHours / 2;
+          extraHoursCompensation = extraHours * extraHourRate;
+          calculatedWorkDays = 2;
+          hoursDeduction = 0;
+          if (record.checkIn) {
+            fridayBonus = dailyRate;
+          }
+        } else if (workHours < NORMAL_WORK_HOURS) {
+          hoursDeduction = NORMAL_WORK_HOURS - workHours;
+          extraHours = 0;
+          extraHoursCompensation = 0;
+          calculatedWorkDays = 1;
+        } else if (workHours > NORMAL_WORK_HOURS) {
+          extraHours = workHours - NORMAL_WORK_HOURS;
+          extraHoursCompensation = extraHours * extraHourRate;
+          calculatedWorkDays = 1;
+          hoursDeduction = 0;
+        } else {
+          extraHours = 0;
+          extraHoursCompensation = 0;
+          calculatedWorkDays = 1;
+          hoursDeduction = 0;
+        }
       }
-    }
-  } else if ((user.shiftType === 'dayStation' || user.shiftType === 'nightStation') && (record.checkIn || record.checkOut)) {
-    workHours = NORMAL_WORK_HOURS;
-    extraHours = 0;
-    extraHoursCompensation = 0;
-    calculatedWorkDays = 1;
-    hoursDeduction = 0;
-    if (record.date.getDay() === 5 && record.checkIn) {
-      fridayBonus = dailyRate;
+    } else {
+      // حالة البصمة الواحدة (checkIn أو checkOut فقط)
+      workHours = NORMAL_WORK_HOURS; // 9 ساعات
+      extraHours = 0;
+      extraHoursCompensation = 0;
+      hoursDeduction = 0;
+      calculatedWorkDays = 1;
+      if ((user.shiftType === 'dayStation' || user.shiftType === 'nightStation') && record.date.getDay() === 5 && record.checkIn) {
+        fridayBonus = dailyRate;
+      }
     }
   }
 
@@ -185,7 +203,7 @@ async function updateAllRecords(employeeCode, user, req) {
   const regularHourRate = dailyRate / NORMAL_WORK_HOURS;
 
   const annualLeaveBalance = user.annualLeaveBalance !== undefined ? Math.max(user.annualLeaveBalance, 0) : 0;
-  console.log(`Updating all records for employee ${employeeCode} with annualLeaveBalance = ${annualLeaveBalance}`);
+  console.log(`Updating all records for employee ${employeeCode} with monthlyLateAllowance = ${monthlyLateAllowance}`);
 
   for (const record of records) {
     await removeDuplicates(employeeCode, record.date);
@@ -237,11 +255,11 @@ async function updateAllRecords(employeeCode, user, req) {
     await record.save();
   }
 
-  const updateResult = await User.updateOne(
+  await User.updateOne(
     { code: employeeCode },
     { $set: { monthlyLateAllowance } }
   );
-  console.log(`Update result for User monthlyLateAllowance: ${JSON.stringify(updateResult)}`);
+  console.log(`Updated User monthlyLateAllowance for ${employeeCode} to ${monthlyLateAllowance}`);
 }
 
 // POST /api/attendance/upload
@@ -419,10 +437,10 @@ async function processAttendance(results, req, res) {
             date: lastCheckInDate,
             checkIn: time,
             checkOut: null,
-            calculatedWorkDays: 0,
+            calculatedWorkDays: 1,
             extraHours: 0,
             extraHoursCompensation: 0,
-            workHours: 0,
+            workHours: NORMAL_WORK_HOURS,
             hoursDeduction: 0,
             fridayBonus: 0,
             status: 'present',
@@ -457,10 +475,10 @@ async function processAttendance(results, req, res) {
               date: checkOutDate,
               checkIn: time,
               checkOut: null,
-              calculatedWorkDays: 0,
+              calculatedWorkDays: 1,
               extraHours: 0,
               extraHoursCompensation: 0,
-              workHours: 0,
+              workHours: NORMAL_WORK_HOURS,
               hoursDeduction: 0,
               fridayBonus: 0,
               status: 'present',
@@ -572,17 +590,8 @@ async function processAttendance(results, req, res) {
         let deductedDays = 0;
         let hoursDeduction = 0;
 
-        if (user.shiftType === 'administrative') {
+        if (user.shiftType === 'administrative' && checkIn) {
           lateMinutes = calculateLateMinutes(user, checkIn);
-          if (lateMinutes > 0) {
-            if (user.monthlyLateAllowance >= lateMinutes) {
-              user.monthlyLateAllowance -= lateMinutes;
-            } else {
-              const excessLateMinutes = lateMinutes - user.monthlyLateAllowance;
-              user.monthlyLateAllowance = 0;
-              deductedDays = calculateDeductedDays(excessLateMinutes, checkIn);
-            }
-          }
         }
 
         let workHours = 0;
@@ -591,10 +600,12 @@ async function processAttendance(results, req, res) {
         let fridayBonus = 0;
         let calculatedWorkDays = (checkIn || checkOut) ? 1 : 0;
 
-        if (user.shiftType === 'dayStation' || user.shiftType === 'nightStation') {
-          const isFriday = date.getDay() === 5;
-          const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
-
+        if (checkIn || checkOut) {
+          workHours = NORMAL_WORK_HOURS; // 9 ساعات لأي بصمة
+          extraHours = 0;
+          extraHoursCompensation = 0;
+          hoursDeduction = 0;
+          calculatedWorkDays = 1;
           if (checkIn && checkOut) {
             const checkInDate = new Date(date);
             checkInDate.setHours(parseInt(checkIn.split(':')[0]), parseInt(checkIn.split(':')[1]));
@@ -604,36 +615,36 @@ async function processAttendance(results, req, res) {
               checkOutDate.setDate(checkOutDate.getDate() + 1);
             }
             workHours = (checkOutDate - checkInDate) / (1000 * 60 * 60);
-            if (isFriday) {
-              workHours *= 2;
-              extraHours = workHours / 2;
-              extraHoursCompensation = extraHours * extraHourRate;
-              calculatedWorkDays = 2;
-              hoursDeduction = 0;
-            } else if (workHours < NORMAL_WORK_HOURS) {
-              hoursDeduction = NORMAL_WORK_HOURS - workHours;
-              extraHours = 0;
-              extraHoursCompensation = 0;
-              calculatedWorkDays = 1;
-            } else if (workHours > NORMAL_WORK_HOURS) {
-              extraHours = workHours - NORMAL_WORK_HOURS;
-              extraHoursCompensation = extraHours * extraHourRate;
-              calculatedWorkDays = 1;
-              hoursDeduction = 0;
-            } else {
-              extraHours = 0;
-              extraHoursCompensation = 0;
-              calculatedWorkDays = 1;
-              hoursDeduction = 0;
+            if (user.shiftType === 'dayStation' || user.shiftType === 'nightStation') {
+              const isFriday = date.getDay() === 5;
+              const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
+              if (isFriday) {
+                workHours *= 2;
+                extraHours = workHours / 2;
+                extraHoursCompensation = extraHours * extraHourRate;
+                calculatedWorkDays = 2;
+                hoursDeduction = 0;
+                if (checkIn) {
+                  fridayBonus = dailyRate;
+                }
+              } else if (workHours < NORMAL_WORK_HOURS) {
+                hoursDeduction = NORMAL_WORK_HOURS - workHours;
+                extraHours = 0;
+                extraHoursCompensation = 0;
+                calculatedWorkDays = 1;
+              } else if (workHours > NORMAL_WORK_HOURS) {
+                extraHours = workHours - NORMAL_WORK_HOURS;
+                extraHoursCompensation = extraHours * extraHourRate;
+                calculatedWorkDays = 1;
+                hoursDeduction = 0;
+              } else {
+                extraHours = 0;
+                extraHoursCompensation = 0;
+                calculatedWorkDays = 1;
+                hoursDeduction = 0;
+              }
             }
-          } else if (checkIn || checkOut) {
-            workHours = NORMAL_WORK_HOURS;
-            extraHours = 0;
-            extraHoursCompensation = 0;
-            calculatedWorkDays = 1;
-            hoursDeduction = 0;
-          }
-          if (checkIn && isFriday) {
+          } else if ((user.shiftType === 'dayStation' || user.shiftType === 'nightStation') && date.getDay() === 5 && checkIn) {
             fridayBonus = dailyRate;
           }
         }
@@ -653,8 +664,6 @@ async function processAttendance(results, req, res) {
           existingRecord.workHours = workHours;
           existingRecord.hoursDeduction = hoursDeduction;
           existingRecord.fridayBonus = fridayBonus;
-          existingRecord.monthlyLateAllowance = user.monthlyLateAllowance;
-          existingRecord.annualLeaveBalance = user.annualLeaveBalance;
           existingRecord.employeeName = user.employeeName;
           existingRecord.shiftType = user.shiftType;
           existingRecord.workingDays = user.workingDays;
@@ -695,7 +704,7 @@ async function processAttendance(results, req, res) {
   res.status(201).json({ message: 'تم رفع البصمات بنجاح' });
 }
 
-// GET /api/attendance (معدلة لتضمين تعويض الساعات الإضافية بشكل صحيح)
+// GET /api/attendance
 router.get('/', auth, async (req, res) => {
   const { employeeCode, startDate, endDate, filterPresent, filterAbsent, filterSingleCheckIn, shiftType } = req.query;
   const query = {};
@@ -724,6 +733,43 @@ router.get('/', auth, async (req, res) => {
       ? await User.find({ code: String(employeeCode).trim() })
       : await User.find();
     console.log(`Found ${users.length} users`);
+
+    // تحديث monthlyLateAllowance لكل موظف
+    const userMap = users.reduce((map, user) => {
+      map[user.code] = user;
+      return map;
+    }, {});
+    for (const employeeCode of [...new Set(records.map(r => r.employeeCode))]) {
+      const user = userMap[employeeCode];
+      if (!user) continue;
+
+      let monthlyLateAllowance = user.monthlyLateAllowance || 120;
+      const employeeRecords = records
+        .filter(r => r.employeeCode === employeeCode && r.shiftType === 'administrative')
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      for (let i = 0; i < employeeRecords.length; i++) {
+        const record = employeeRecords[i];
+        let totalLateMinutes = 0;
+        for (let j = 0; j <= i; j++) {
+          totalLateMinutes += calculateLateMinutes(user, employeeRecords[j].checkIn);
+        }
+        record.monthlyLateAllowance = Math.max(0, monthlyLateAllowance - totalLateMinutes);
+        record.deductedDays = totalLateMinutes > monthlyLateAllowance
+          ? calculateDeductedDays(totalLateMinutes - monthlyLateAllowance, record.checkIn)
+          : 0;
+        // تحديث السجل في قاعدة البيانات
+        await Attendance.updateOne(
+          { _id: record._id },
+          { $set: { monthlyLateAllowance: record.monthlyLateAllowance, deductedDays: record.deductedDays } }
+        );
+      }
+      // تحديث monthlyLateAllowance في نموذج User
+      await User.updateOne(
+        { code: employeeCode },
+        { $set: { monthlyLateAllowance: employeeRecords.length > 0 ? employeeRecords[employeeRecords.length - 1].monthlyLateAllowance : monthlyLateAllowance } }
+      );
+    }
 
     const result = [];
     const daysOfWeek = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -870,7 +916,7 @@ router.get('/', auth, async (req, res) => {
           totalLateDeduction: 0,
           netExtraHoursCompensation: 0,
           dailyRate,
-          regularHourRate, // إضافة سعر الساعة لاستخدامه في حساب التعويض
+          regularHourRate,
         };
       }
       if (record.status === 'present') {
@@ -903,7 +949,6 @@ router.get('/', auth, async (req, res) => {
       const user = await User.findOne({ code: employeeCode });
       const isFriday = result.some(record => record.employeeCode === employeeCode && record.date.getDay() === 5 && record.status === 'present');
       const extraHourRate = isFriday ? summaries[employeeCode].regularHourRate * 2 : summaries[employeeCode].regularHourRate;
-      // إعادة حساب التعويض بناءً على إجمالي الساعات الإضافية
       summaries[employeeCode].totalExtraHoursCompensation = summaries[employeeCode].totalExtraHours * extraHourRate;
       summaries[employeeCode].netExtraHoursCompensation =
         summaries[employeeCode].totalExtraHoursCompensation - summaries[employeeCode].totalLateDeduction;
@@ -1001,18 +1046,6 @@ router.put('/:id', auth, async (req, res) => {
     } else {
       const hoursData = calculateWorkHours(record, user, dailyRate, regularHourRate);
       record.lateMinutes = user.shiftType === 'administrative' ? calculateLateMinutes(user, record.checkIn) : 0;
-      if (record.lateMinutes > 0) {
-        if (user.monthlyLateAllowance >= record.lateMinutes) {
-          user.monthlyLateAllowance -= record.lateMinutes;
-          record.deductedDays = 0;
-        } else {
-          const excessLateMinutes = record.lateMinutes - user.monthlyLateAllowance;
-          user.monthlyLateAllowance = 0;
-          record.deductedDays = calculateDeductedDays(excessLateMinutes, record.checkIn);
-        }
-      } else {
-        record.deductedDays = 0;
-      }
       record.workHours = hoursData.workHours;
       record.extraHours = hoursData.extraHours;
       record.extraHoursCompensation = hoursData.extraHoursCompensation;
@@ -1032,12 +1065,10 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     if (leaveAdjustment !== 0) {
-      const updateResult = await User.updateOne(
+      await User.updateOne(
         { code: record.employeeCode },
         { $inc: { annualLeaveBalance: leaveAdjustment } }
       );
-      console.log(`Update result for User: ${JSON.stringify(updateResult)}`);
-
       await User.updateOne(
         { code: record.employeeCode },
         { $max: { annualLeaveBalance: 0 } }
@@ -1045,8 +1076,6 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     const updatedUser = await User.findOne({ code: record.employeeCode });
-    console.log(`After update: annualLeaveBalance for employee ${record.employeeCode} = ${updatedUser.annualLeaveBalance}`);
-
     await updateAllRecords(record.employeeCode, updatedUser, req);
 
     const responseRecord = { ...record.toObject(), workingDays: formatWorkingDays(record.workingDays) };

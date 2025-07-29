@@ -64,7 +64,6 @@ const CreateUser = () => {
       return;
     }
 
-    // تحقق إضافي للتأكد من أن كلمة المرور تحتوي فقط على أحرف صالحة
     if (!/^[a-zA-Z0-9@#$%^&*()]+$/.test(trimmedPassword)) {
       setError('كلمة المرور تحتوي على أحرف غير صالحة');
       setLoading(false);
@@ -116,271 +115,271 @@ const CreateUser = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-purple-50 py-8 px-4 sm:px-6 lg:px-8 font-noto-sans-arabic">
-      <AnimatePresence>
-        {loading && <LoadingSpinner />}
-        {showSuccess && <SuccessCheckmark onComplete={() => setShowSuccess(false)} />}
-      </AnimatePresence>
+    <div className="min-h-screen bg-gradient-to-b from-white to-purple-100 py-12 px-4 sm:px-6 lg:px-8 font-noto-sans-arabic flex items-center justify-center">
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="bg-white p-8 rounded-2xl shadow-lg border border-blue-100 max-w-4xl mx-auto"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        className="bg-white p-8 rounded-xl shadow-2xl border border-purple-200 max-w-3xl w-full"
       >
-        <h2 className="text-3xl font-bold text-blue-400 mb-8 text-right">
-          إنشاء حساب جديد
+        <h2 className="text-2xl font-bold text-purple-700 mb-6 text-right">
+          إنشاء حساب موظف جديد
         </h2>
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-purple-50 text-gray-600 p-4 rounded-lg mb-6 text-right text-sm font-semibold"
+            className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-right text-sm font-medium"
           >
             {error}
           </motion.div>
         )}
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              كود الموظف
-            </label>
-            <input
-              type="text"
-              name="code"
-              value={form.code}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              required
-              disabled={loading}
-              placeholder="أدخل كود الموظف"
-            />
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                كود الموظف
+              </label>
+              <input
+                type="text"
+                name="code"
+                value={form.code}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                required
+                disabled={loading}
+                placeholder="أدخل كود الموظف"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                كلمة المرور
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                required
+                disabled={loading}
+                placeholder="أدخل كلمة المرور"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                الاسم الكامل
+              </label>
+              <input
+                type="text"
+                name="employeeName"
+                value={form.employeeName}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                required
+                disabled={loading}
+                placeholder="أدخل الاسم الكامل"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                القسم
+              </label>
+              <input
+                type="text"
+                name="department"
+                value={form.department}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                required
+                disabled={loading}
+                placeholder="أدخل القسم"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                الراتب الأساسي
+              </label>
+              <input
+                type="number"
+                name="baseSalary"
+                value={form.baseSalary}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                step="0.01"
+                required
+                disabled={loading}
+                placeholder="أدخل الراتب الأساسي"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                الحافز الأساسي
+              </label>
+              <input
+                type="number"
+                name="baseBonus"
+                value={form.baseBonus}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                step="0.01"
+                disabled={loading}
+                placeholder="أدخل الحافز الأساسي"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                نسبة الحافز (%)
+              </label>
+              <input
+                type="number"
+                name="bonusPercentage"
+                value={form.bonusPercentage}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                max="100"
+                step="0.01"
+                disabled={loading}
+                placeholder="أدخل نسبة الحافز"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              كلمة المرور
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              required
-              disabled={loading}
-              placeholder="أدخل كلمة المرور"
-            />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                التأمين الطبي
+              </label>
+              <input
+                type="number"
+                name="medicalInsurance"
+                value={form.medicalInsurance}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                step="0.01"
+                disabled={loading}
+                placeholder="أدخل التأمين الطبي"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                التأمين الاجتماعي
+              </label>
+              <input
+                type="number"
+                name="socialInsurance"
+                value={form.socialInsurance}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                step="0.01"
+                disabled={loading}
+                placeholder="أدخل التأمين الاجتماعي"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                بدل الوجبة
+              </label>
+              <input
+                type="number"
+                name="mealAllowance"
+                value={form.mealAllowance}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                step="0.01"
+                disabled={loading}
+                placeholder="أدخل بدل الوجبة"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                عدد أيام العمل
+              </label>
+              <select
+                name="workingDays"
+                value={form.workingDays}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                disabled={loading}
+              >
+                <option value="5">5 أيام (الجمعة والسبت إجازة)</option>
+                <option value="6">6 أيام (الجمعة إجازة)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                نوع الشيفت
+              </label>
+              <select
+                name="shiftType"
+                value={form.shiftType}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                disabled={loading}
+              >
+                <option value="administrative">إداري</option>
+                <option value="dayStation">محطة نهارًا</option>
+                <option value="nightStation">محطة ليلًا</option>
+                <option value="24/24">24/24</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                رصيد الإجازة السنوية
+              </label>
+              <input
+                type="number"
+                name="annualLeaveBalance"
+                value={form.annualLeaveBalance}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                disabled={loading}
+                placeholder="أدخل رصيد الإجازة"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                رصيد دقائق السماح الشهري
+              </label>
+              <input
+                type="number"
+                name="monthlyLateAllowance"
+                value={form.monthlyLateAllowance}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
+                min="0"
+                disabled={loading}
+                placeholder="أدخل رصيد دقائق السماح"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-2 text-right">
+                صافي الراتب
+              </label>
+              <input
+                type="text"
+                value={form.netSalary}
+                className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm bg-gray-100 cursor-not-allowed"
+                readOnly
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              الاسم الكامل
-            </label>
-            <input
-              type="text"
-              name="employeeName"
-              value={form.employeeName}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              required
-              disabled={loading}
-              placeholder="أدخل الاسم الكامل"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              القسم
-            </label>
-            <input
-              type="text"
-              name="department"
-              value={form.department}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              required
-              disabled={loading}
-              placeholder="أدخل القسم"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              الراتب الأساسي
-            </label>
-            <input
-              type="number"
-              name="baseSalary"
-              value={form.baseSalary}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              step="0.01"
-              required
-              disabled={loading}
-              placeholder="أدخل الراتب الأساسي"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              الحافز الأساسي
-            </label>
-            <input
-              type="number"
-              name="baseBonus"
-              value={form.baseBonus}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              step="0.01"
-              disabled={loading}
-              placeholder="أدخل الحافز الأساسي"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              نسبة الحافز (%)
-            </label>
-            <input
-              type="number"
-              name="bonusPercentage"
-              value={form.bonusPercentage}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              max="100"
-              step="0.01"
-              disabled={loading}
-              placeholder="أدخل نسبة الحافز"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              التأمين الطبي
-            </label>
-            <input
-              type="number"
-              name="medicalInsurance"
-              value={form.medicalInsurance}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              step="0.01"
-              disabled={loading}
-              placeholder="أدخل التأمين الطبي"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              التأمين الاجتماعي
-            </label>
-            <input
-              type="number"
-              name="socialInsurance"
-              value={form.socialInsurance}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              step="0.01"
-              disabled={loading}
-              placeholder="أدخل التأمين الاجتماعي"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              بدل وجبة
-            </label>
-            <input
-              type="number"
-              name="mealAllowance"
-              value={form.mealAllowance}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              step="0.01"
-              disabled={loading}
-              placeholder="أدخل بدل الوجبة"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              عدد أيام العمل
-            </label>
-            <select
-              name="workingDays"
-              value={form.workingDays}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              disabled={loading}
-            >
-              <option value="5">5 أيام (الجمعة والسبت إجازة)</option>
-              <option value="6">6 أيام (الجمعة إجازة)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              نوع الشيفت
-            </label>
-            <select
-              name="shiftType"
-              value={form.shiftType}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              disabled={loading}
-            >
-              <option value="administrative">إداري</option>
-              <option value="dayStation">محطة نهارًا</option>
-              <option value="nightStation">محطة ليلًا</option>
-              <option value="24/24">24/24</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              رصيد الإجازة السنوية
-            </label>
-            <input
-              type="number"
-              name="annualLeaveBalance"
-              value={form.annualLeaveBalance}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              disabled={loading}
-              placeholder="أدخل رصيد الإجازة"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              رصيد دقائق السماح الشهري
-            </label>
-            <input
-              type="number"
-              name="monthlyLateAllowance"
-              value={form.monthlyLateAllowance}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 bg-purple-50 hover:bg-blue-50"
-              min="0"
-              disabled={loading}
-              placeholder="أدخل رصيد دقائق السماح"
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-semibold mb-2 text-right">
-              الصافي
-            </label>
-            <input
-              type="text"
-              value={form.netSalary}
-              className="w-full px-4 py-3 border border-blue-100 rounded-lg text-right text-sm bg-purple-50 cursor-not-allowed"
-              readOnly
-            />
-          </div>
-          <div className="sm:col-span-2 flex justify-end gap-4">
+          <div className="md:col-span-2 flex justify-end gap-4 mt-6">
             <motion.button
               type="submit"
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-blue-400 text-white px-6 py-3 rounded-lg hover:bg-blue-500 transition-all duration-200 text-sm font-semibold shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {loading ? 'جارٍ الحفظ...' : 'حفظ'}
+              {loading ? 'جارٍ الحفظ...' : 'إنشاء الموظف'}
             </motion.button>
             <motion.button
               type="button"
@@ -388,7 +387,7 @@ const CreateUser = () => {
               disabled={loading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition-all duration-200 text-sm font-semibold shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 text-sm font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               إلغاء
             </motion.button>

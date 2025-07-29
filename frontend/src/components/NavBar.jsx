@@ -5,7 +5,7 @@ import { LogOut, Menu, X } from 'lucide-react';
 import { AuthContext } from './AuthProvider';
 
 const NavBar = () => {
-  const { logout } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const toggleMenu = () => {
@@ -38,23 +38,27 @@ const NavBar = () => {
     exit: { opacity: 0, y: 10 },
   };
 
+  const navItems = user && user.role === 'admin' ? [
+    { to: '/dashboard', label: 'الرئيسية' },
+    { to: '/create-user', label: 'إنشاء حساب جديد' },
+    { to: '/edit-user', label: 'تعديل حساب' },
+    { to: '/upload-attendance', label: 'رفع البصمات' },
+    { to: '/salary-report', label: 'تقرير الراتب' },
+  ] : [
+    { to: '/salary-report', label: 'تقرير الراتب' },
+  ];
+
   return (
-    <nav className="bg-gradient-to-b from-white to-purple-50 p-4 shadow-md">
+    <nav className="bg-gradient-to-r from-purple-600 to-blue-500 p-4 shadow-xl">
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet" />
       <div className="container mx-auto flex justify-between items-center font-cairo">
-        <div className="text-blue-400 text-xl font-bold">إدارة الموظفين</div>
+        <div className="text-white text-xl font-bold">إدارة الموظفين</div>
         <div className="hidden md:flex gap-6 items-center">
-          {[
-            { to: '/dashboard', label: 'الرئيسية' },
-            { to: '/create-user', label: 'إنشاء حساب جديد' },
-            { to: '/edit-user', label: 'تعديل حساب' },
-            { to: '/upload-attendance', label: 'رفع البصمات' },
-            { to: '/salary-report', label: 'تقرير الراتب' },
-          ].map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="text-blue-400 font-semibold text-sm hover:bg-blue-50 px-3 py-2 rounded-md transition-all duration-200"
+              className="text-white font-semibold text-sm hover:bg-purple-700 px-3 py-2 rounded-md transition-all duration-200"
             >
               {item.label}
             </Link>
@@ -63,14 +67,14 @@ const NavBar = () => {
             onClick={logout}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-all duration-200 text-sm font-semibold shadow-md"
+            className="flex items-center gap-2 bg-white text-purple-600 px-4 py-2 rounded-md hover:bg-purple-100 transition-all duration-200 text-sm font-semibold shadow-md"
           >
-            <LogOut className="h-4 w-4 text-white" />
+            <LogOut className="h-4 w-4 text-purple-600" />
             تسجيل الخروج
           </motion.button>
         </div>
         <motion.button
-          className="md:hidden text-purple-600 focus:outline-none"
+          className="md:hidden text-white focus:outline-none"
           onClick={toggleMenu}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
@@ -87,19 +91,13 @@ const NavBar = () => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="md:hidden bg-purple-100 shadow-lg mt-2 rounded-lg overflow-hidden border border-blue-100"
+            className="md:hidden bg-purple-100 shadow-lg mt-2 rounded-lg overflow-hidden border border-purple-200"
           >
-            {[
-              { to: '/dashboard', label: 'الرئيسية' },
-              { to: '/create-user', label: 'إنشاء حساب جديد' },
-              { to: '/edit-user', label: 'تعديل حساب' },
-              { to: '/upload-attendance', label: 'رفع البصمات' },
-              { to: '/salary-report', label: 'تقرير الراتب' },
-            ].map((item) => (
+            {navItems.map((item) => (
               <motion.div key={item.to} variants={itemVariants} className="px-4 py-2">
                 <Link
                   to={item.to}
-                  className="block text-blue-400 font-semibold text-sm hover:bg-blue-50 px-3 py-2 rounded-md transition-all duration-200"
+                  className="block text-purple-600 font-semibold text-sm hover:bg-purple-200 px-3 py-2 rounded-md transition-all duration-200"
                   onClick={toggleMenu}
                 >
                   {item.label}
