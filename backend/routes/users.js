@@ -105,6 +105,9 @@ const calculateWorkHours = (record, user, dailyRate, regularHourRate) => {
   let calculatedWorkDays = 0;
   let fridayBonus = 0;
 
+  const isFriday = new Date(record.date).getDay() === 5;
+  const isWeeklyOff = record.status === 'weekly_off';
+
   if (record.status === 'present' && record.checkIn && record.checkOut) {
     const checkInDate = new Date(record.date);
     checkInDate.setHours(parseInt(record.checkIn.split(':')[0]), parseInt(record.checkIn.split(':')[1]));
@@ -127,15 +130,14 @@ const calculateWorkHours = (record, user, dailyRate, regularHourRate) => {
       if (checkOutTime > thresholdTime) {
         extraHours = (checkOutTime - thresholdTime) / 60;
         extraHours = parseFloat(extraHours.toFixed(2));
-        const hourlyRate = (user.baseSalary / 30) / 9;
-        extraHoursCompensation = extraHours * hourlyRate;
+        extraHoursCompensation = extraHours * regularHourRate;
         calculatedWorkDays = 1;
-        hoursDeduction = 0; // لا خصم ساعات للشيفت الإداري
+        hoursDeduction = 0;
       } else {
         extraHours = 0;
         extraHoursCompensation = 0;
         calculatedWorkDays = 1;
-        hoursDeduction = 0; // لا خصم ساعات للشيفت الإداري
+        hoursDeduction = workHours < 9 ? parseFloat((9 - workHours).toFixed(2)) : 0;
       }
     } else if (user.shiftType === '24/24') {
       if (workHours >= 9) {
@@ -147,57 +149,48 @@ const calculateWorkHours = (record, user, dailyRate, regularHourRate) => {
         extraHours = 0;
         extraHoursCompensation = 0;
         calculatedWorkDays = 1;
-        hoursDeduction = 9 - workHours;
+        hoursDeduction = parseFloat((9 - workHours).toFixed(2));
       }
     } else if (user.shiftType === 'dayStation' || user.shiftType === 'nightStation') {
-      const isFriday = new Date(record.date).getDay() === 5;
-      const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
-      if (isFriday) {
-        workHours *= 2;
-        extraHours = workHours - 9;
-        extraHoursCompensation = extraHours * extraHourRate;
-        calculatedWorkDays = 2;
-        hoursDeduction = 0;
-        if (record.checkIn) {
-          fridayBonus = dailyRate;
-        }
-      } else if (workHours < 9) {
-        hoursDeduction = 9 - workHours;
-        extraHours = 0;
-        extraHoursCompensation = 0;
-        calculatedWorkDays = 1;
-      } else if (workHours > 9) {
-        extraHours = workHours - 9;
-        extraHoursCompensation = extraHours * extraHourRate;
+      if (isFriday && record.status === 'present') {
+        // في أيام الجمعة، كل ساعات العمل تُحسب كساعات إضافية مضاعفة
+        extraHours = parseFloat((workHours * 2).toFixed(2));
+        extraHoursCompensation = extraHours * regularHourRate; // 25.93 ريال/ساعة
+        calculatedWorkDays = 0; // لا نحسب يوم الجمعة كيوم عمل
+        hoursDeduction = 0; // لا خصم ساعات في أيام الجمعة
+        fridayBonus = 0; // لا بدل إضافي للجمعة
+      } else if (workHours >= 9) {
+        extraHours = parseFloat((workHours - 9).toFixed(2));
+        extraHoursCompensation = extraHours * regularHourRate;
         calculatedWorkDays = 1;
         hoursDeduction = 0;
       } else {
         extraHours = 0;
         extraHoursCompensation = 0;
         calculatedWorkDays = 1;
-        hoursDeduction = 0;
+        hoursDeduction = parseFloat((9 - workHours).toFixed(2));
       }
     }
   } else if (record.status === 'present' && (record.checkIn || record.checkOut)) {
-    // التعامل مع السجلات التي تحتوي على بصمة واحدة فقط
     workHours = 9;
     extraHours = 0;
     extraHoursCompensation = 0;
     calculatedWorkDays = 1;
-    hoursDeduction = 0; // لا خصم ساعات للشيفت الإداري أو أي شيفت في حالة بصمة واحدة
-    if (new Date(record.date).getDay() === 5 && (user.shiftType === 'dayStation' || user.shiftType === 'nightStation')) {
-      fridayBonus = dailyRate;
-    }
+    hoursDeduction = 0;
+    fridayBonus = 0;
   } else if (record.status === 'present') {
-    // إذا كان الحضور مؤكد بدون checkIn/checkOut
     workHours = 9;
     extraHours = 0;
     extraHoursCompensation = 0;
     calculatedWorkDays = 1;
-    hoursDeduction = 0; // لا خصم ساعات
-    if (new Date(record.date).getDay() === 5 && (user.shiftType === 'dayStation' || user.shiftType === 'nightStation')) {
-      fridayBonus = dailyRate;
-    }
+    hoursDeduction = 0;
+    fridayBonus = 0;
+  }
+
+  // لا خصم ساعات في أيام الإجازة الأسبوعية أو الجمعة
+  if (isWeeklyOff || (isFriday && (user.shiftType === 'dayStation' || user.shiftType === 'nightStation'))) {
+    hoursDeduction = 0;
+    logger.info(`No hours deduction applied for ${record.employeeCode} on ${new Date(record.date).toISOString().split('T')[0]} due to weekly off or Friday`);
   }
 
   logger.info(`Calculated work hours for ${record.employeeCode} on ${new Date(record.date).toISOString().split('T')[0]}: workHours=${workHours}, extraHours=${extraHours}, extraHoursCompensation=${extraHoursCompensation}, hoursDeduction=${hoursDeduction}, calculatedWorkDays=${calculatedWorkDays}, fridayBonus=${fridayBonus}`);
@@ -559,9 +552,10 @@ router.get('/salary-report', auth, async (req, res) => {
     end.setHours(23, 59, 59, 999);
 
     for (const user of users) {
-      // تحديد الأجر اليومي بناءً على نوع الشيفت
+      // تحديد الأجر اليومي والساعي بناءً على نوع الشيفت
       const dailySalary = parseFloat(user.baseSalary || 0) / 30;
-      const hourlyRate = dailySalary / 9;
+      const hourlyRate = dailySalary / 9; // معدل الساعة العادية
+      const regularHourRate = 25.93; // معدل التعويض للساعات الإضافية
 
       const attendanceQuery = {
         employeeCode: user.code,
@@ -644,7 +638,7 @@ router.get('/salary-report', auth, async (req, res) => {
         // تحديث الحالة بناءً على السجل
         record.status = calculateStatus(new Date(record.date), user.workingDays, user.shiftType, record);
 
-        const { workHours, extraHours, extraHoursCompensation, hoursDeduction, calculatedWorkDays, fridayBonus } = calculateWorkHours(record, user, dailySalary, hourlyRate);
+        const { workHours, extraHours, extraHoursCompensation, hoursDeduction, calculatedWorkDays, fridayBonus } = calculateWorkHours(record, user, dailySalary, regularHourRate);
 
         switch (record.status) {
           case 'present':
@@ -694,6 +688,7 @@ router.get('/salary-report', auth, async (req, res) => {
           totalDeductions = absentDays + totalDeductedDaysFromAttendance;
           totalDeductionsAmount =
             (totalDeductions * dailySalary) +
+            (totalHoursDeduction * hourlyRate) +
             parseFloat(user.medicalInsurance || 0) +
             parseFloat(user.socialInsurance || 0) +
             totalMealAllowanceDeduction +
@@ -729,6 +724,7 @@ router.get('/salary-report', auth, async (req, res) => {
           baseBonus: parseFloat(user.baseBonus || 0),
           workingDays: user.workingDays,
           mealAllowance: finalMealAllowance,
+          mealAllowanceDeduction: totalMealAllowanceDeduction,
           shiftType: user.shiftType,
           medicalInsurance: parseFloat(user.medicalInsurance || 0),
           socialInsurance: parseFloat(user.socialInsurance || 0),
@@ -740,7 +736,6 @@ router.get('/salary-report', auth, async (req, res) => {
           medicalLeaveDays,
           totalLateMinutes,
           totalDeductions: parseFloat(totalDeductions.toFixed(2)),
-          totalDeductionsAmount: parseFloat(totalDeductionsAmount.toFixed(2)),
           totalLeaveCompensation,
           totalMedicalLeaveDeduction,
           totalWorkDays,
@@ -748,7 +743,6 @@ router.get('/salary-report', auth, async (req, res) => {
           totalExtraHours: parseFloat(totalExtraHours.toFixed(2)),
           totalExtraHoursCompensation: parseFloat(totalExtraHoursCompensation.toFixed(2)),
           totalFridayBonus,
-          totalMealAllowanceDeduction,
           totalHoursDeduction: parseFloat(totalHoursDeduction.toFixed(2)),
           violationsTotal: parseFloat(user.violationsTotal || 0),
           violationsDeduction: parseFloat(user.violationsDeduction || 0),
@@ -808,152 +802,26 @@ router.patch('/update-finance/:id', auth, async (req, res) => {
       logger.warn(`Advances deduction (${advancesDeduction}) exceeds total advances (${advancesTotal}) for user: ${user.code}`);
       return res.status(400).json({ message: 'خصم السلف لا يمكن أن يتجاوز إجمالي السلف' });
     }
-    if (deductedDays < 0) {
-      logger.warn(`Invalid deductedDays value (${deductedDays}) for user: ${user.code}`);
-      return res.status(400).json({ message: 'أيام الخصم يجب أن تكون غير سالبة' });
-    }
 
-    // تحديث إجمالي المخالفات والسلف بعد الخصم
-    const updatedViolationsTotal = violationsTotal - violationsDeduction;
-    const updatedAdvancesTotal = advancesTotal - advancesDeduction;
-
-    // حساب صافي الراتب بناءً على التغييرات
-    const dailySalary = parseFloat(user.baseSalary || 0) / 30;
-    const hourlyRate = dailySalary / 9;
-
-    // تعريف النطاق الزمني للشهر الحالي
-    const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-
-    // جلب سجلات الحضور لتحديث صافي الراتب
-    const attendanceQuery = {
-      employeeCode: user.code,
-      date: { $gte: start, $lte: end },
+    const updateData = {
+      violationsDeduction,
+      advancesDeduction,
+      violationsTotal,
+      advancesTotal,
+      updatedBy: req.user.id,
     };
-    const attendanceRecords = await Attendance.find(attendanceQuery).sort({ date: 1 }).lean();
 
-    let presentDays = 0,
-      absentDays = 0,
-      weeklyOffDays = 0,
-      leaveDays = 0,
-      officialLeaveDays = 0,
-      medicalLeaveDays = 0,
-      totalWorkHours = 0,
-      totalExtraHours = 0,
-      totalExtraHoursCompensation = 0,
-      totalFridayBonus = 0,
-      totalLeaveCompensation = 0,
-      totalMedicalLeaveDeduction = 0,
-      totalDeductedDaysFromAttendance = deductedDays,
-      totalHoursDeduction = 0;
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true }
+    ).select('-password');
 
-    for (const record of attendanceRecords) {
-      record.status = calculateStatus(new Date(record.date), user.workingDays, user.shiftType, record);
-      const { workHours, extraHours, extraHoursCompensation, hoursDeduction, calculatedWorkDays, fridayBonus } = calculateWorkHours(record, user, dailySalary, hourlyRate);
-
-      switch (record.status) {
-        case 'present':
-          presentDays += calculatedWorkDays;
-          totalWorkHours += workHours;
-          totalExtraHours += extraHours;
-          totalExtraHoursCompensation += extraHoursCompensation;
-          totalHoursDeduction += hoursDeduction;
-          totalFridayBonus += fridayBonus;
-          break;
-        case 'absent':
-          absentDays++;
-          break;
-        case 'weekly_off':
-          weeklyOffDays++;
-          break;
-        case 'leave':
-          leaveDays++;
-          totalLeaveCompensation += parseFloat(record.leaveCompensation || 0);
-          break;
-        case 'official_leave':
-          officialLeaveDays++;
-          break;
-        case 'medical_leave':
-          medicalLeaveDays++;
-          totalMedicalLeaveDeduction += parseFloat(record.medicalLeaveDeduction || (dailySalary * 0.25));
-          break;
-      }
-    }
-
-    // حساب خصم بدل الوجبة بناءً على أيام الغياب
-    const maxMealAllowance = parseFloat(user.mealAllowance || 500);
-    const totalMealAllowanceDeduction = Math.min(absentDays * 50, maxMealAllowance);
-    const mealAllowanceAfterDeduction = maxMealAllowance - totalMealAllowanceDeduction;
-    const finalMealAllowance = mealAllowanceAfterDeduction >= 0 ? mealAllowanceAfterDeduction : 0;
-
-    // حساب إجمالي الخصومات
-    let totalDeductions;
-    let totalDeductionsAmount;
-    if (user.shiftType === 'administrative') {
-      totalDeductions = absentDays + totalDeductedDaysFromAttendance;
-      totalDeductionsAmount =
-        (totalDeductions * dailySalary) +
-        parseFloat(user.medicalInsurance || 0) +
-        parseFloat(user.socialInsurance || 0) +
-        totalMealAllowanceDeduction +
-        violationsDeduction +
-        advancesDeduction;
-    } else {
-      totalDeductions = absentDays;
-      totalDeductionsAmount =
-        (totalDeductions * dailySalary) +
-        (totalHoursDeduction * hourlyRate) +
-        parseFloat(user.medicalInsurance || 0) +
-        parseFloat(user.socialInsurance || 0) +
-        totalMealAllowanceDeduction +
-        violationsDeduction +
-        advancesDeduction;
-    }
-
-    const netSalary =
-      parseFloat(user.baseSalary || 0) +
-      parseFloat(user.baseBonus || 0) +
-      finalMealAllowance +
-      totalLeaveCompensation +
-      totalExtraHoursCompensation +
-      totalFridayBonus -
-      totalDeductionsAmount;
-
-    const finalNetSalary = Math.max(0, parseFloat(netSalary.toFixed(2)));
-
-    // تحديث سجلات الحضور بـ deductedDays
-    await Attendance.updateMany(
-      { employeeCode: user.code, date: { $gte: start, $lte: end } },
-      { $set: { deductedDays: totalDeductedDaysFromAttendance / attendanceRecords.length || 0 } }
-    );
-
-    // تحديث بيانات المستخدم
-    user.violationsTotal = updatedViolationsTotal;
-    user.violationsDeduction = violationsDeduction;
-    user.advancesTotal = updatedAdvancesTotal;
-    user.advancesDeduction = advancesDeduction;
-    user.netSalary = finalNetSalary;
-
-    await user.save();
-    logger.info(`Financial data updated for user: ${user.code}, violationsTotal: ${updatedViolationsTotal}, violationsDeduction: ${violationsDeduction}, advancesTotal: ${updatedAdvancesTotal}, advancesDeduction: ${advancesDeduction}, netSalary: ${finalNetSalary}, deductedDays: ${totalDeductedDaysFromAttendance}`);
-
-    res.json({
-      message: 'تم تحديث البيانات المالية بنجاح',
-      user: {
-        ...user.toObject(),
-        violationsTotal: updatedViolationsTotal,
-        violationsDeduction,
-        advancesTotal: updatedAdvancesTotal,
-        advancesDeduction,
-        netSalary: finalNetSalary,
-        deductedDays: parseFloat(totalDeductedDaysFromAttendance.toFixed(2)),
-      },
-    });
+    logger.info(`Financial data updated for user: ${user.code}`);
+    res.json({ message: 'تم تحديث البيانات المالية بنجاح', user: updatedUser });
   } catch (err) {
     logger.error('Error updating financial data:', { error: err.message, stack: err.stack });
-    res.status(400).json({ message: `خطأ أثناء تحديث البيانات المالية: ${err.message}` });
+    res.status(500).json({ message: `خطأ أثناء تحديث البيانات المالية: ${err.message}` });
   }
 });
 

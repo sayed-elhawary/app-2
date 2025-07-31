@@ -47,7 +47,8 @@ const UploadAttendance = () => {
   }, [user, navigate]);
 
   const calculateExtraHours = (record) => {
-    const { checkOut, shiftType, workHours } = record;
+    const { checkIn, checkOut, shiftType, workHours, date } = record;
+    const isFriday = new Date(date).getDay() === 5;
 
     if (shiftType === 'administrative' && checkOut) {
       const [hours, minutes] = checkOut.split(':').map(Number);
@@ -59,7 +60,21 @@ const UploadAttendance = () => {
       return 0;
     }
 
-    if (['dayStation', 'nightStation', '24/24'].includes(shiftType) && workHours > 9) {
+    if (['dayStation', 'nightStation'].includes(shiftType)) {
+      if (isFriday) {
+        if (checkIn && checkOut) {
+          return workHours * 2;
+        } else if (checkIn || checkOut) {
+          return 9 * 2;
+        }
+        return 0;
+      } else if (workHours > 9) {
+        return workHours - 9;
+      }
+      return 0;
+    }
+
+    if (shiftType === '24/24' && workHours > 9) {
       return workHours - 9;
     }
 
@@ -137,19 +152,16 @@ const UploadAttendance = () => {
     };
 
     try {
-      // جلب السجلات من /api/attendance
       const attendanceResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/attendance`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
       });
 
-      // جلب بيانات المستخدمين للحصول على workingDays
       const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { code: employeeCode.trim() || undefined },
       });
 
-      // إنشاء خريطة لتخزين workingDays بناءً على employeeCode
       const userMap = userResponse.data.users.reduce((map, user) => {
         map[user.code] = user.workingDays;
         return map;
@@ -163,11 +175,10 @@ const UploadAttendance = () => {
           extraHours,
           annualLeaveBalance: Math.floor(record.annualLeaveBalance || 0),
           monthlyLateAllowance: record.shiftType === 'administrative' ? record.monthlyLateAllowance : '-',
-          workingDays: userMap[record.employeeCode] || record.workingDays || '5', // استخدام workingDays من User أو القيمة الافتراضية
+          workingDays: userMap[record.employeeCode] || record.workingDays || '5',
         };
       });
 
-      // إعادة حساب الإجماليات بناءً على السجلات
       const summaries = records.reduce((acc, record) => {
         const code = record.employeeCode;
         if (!acc[code]) {
@@ -204,7 +215,6 @@ const UploadAttendance = () => {
         return acc;
       }, {});
 
-      // إضافة تحذير للموظفين الإداريين إذا كان رصيد السماح بالتأخير منخفضًا
       Object.keys(summaries).forEach((employeeCode) => {
         if (records.some((record) => record.employeeCode === employeeCode && record.shiftType === 'administrative')) {
           const lastRecord = records
@@ -244,18 +254,15 @@ const UploadAttendance = () => {
     };
 
     try {
-      // جلب السجلات من /api/attendance
       const attendanceResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/attendance`, {
         headers: { Authorization: `Bearer ${token}` },
         params,
       });
 
-      // جلب بيانات المستخدمين للحصول على workingDays
       const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // إنشاء خريطة لتخزين workingDays بناءً على employeeCode
       const userMap = userResponse.data.users.reduce((map, user) => {
         map[user.code] = user.workingDays;
         return map;
@@ -269,11 +276,10 @@ const UploadAttendance = () => {
           extraHours,
           annualLeaveBalance: Math.floor(record.annualLeaveBalance || 0),
           monthlyLateAllowance: record.shiftType === 'administrative' ? record.monthlyLateAllowance : '-',
-          workingDays: userMap[record.employeeCode] || record.workingDays || '5', // استخدام workingDays من User أو القيمة الافتراضية
+          workingDays: userMap[record.employeeCode] || record.workingDays || '5',
         };
       });
 
-      // إعادة حساب الإجماليات بناءً على السجلات
       const summaries = records.reduce((acc, record) => {
         const code = record.employeeCode;
         if (!acc[code]) {
@@ -310,7 +316,6 @@ const UploadAttendance = () => {
         return acc;
       }, {});
 
-      // إضافة تحذير للموظفين الإداريين إذا كان رصيد السماح بالتأخير منخفضًا
       Object.keys(summaries).forEach((employeeCode) => {
         if (records.some((record) => record.employeeCode === employeeCode && record.shiftType === 'administrative')) {
           const lastRecord = records
@@ -395,7 +400,7 @@ const UploadAttendance = () => {
       extraHours: calculateExtraHours(record),
       monthlyLateAllowance: record.shiftType === 'administrative' ? record.monthlyLateAllowance : 0,
       shiftType: record.shiftType,
-      workingDays: record.workingDays, // التأكد من تمرير workingDays
+      workingDays: record.workingDays,
     });
     setShowEditModal(true);
   };
@@ -1383,11 +1388,7 @@ const UploadAttendance = () => {
                     <th className="px-4 py-3 font-semibold text-purple-800">إجمالي الساعات الإضافية</th>
                   </tr>
                 </thead>
-  
-
-
-
-		  <tbody>
+                <tbody>
                   {Object.keys(summaries).map((employeeCode, index) => {
                     const summary = summaries[employeeCode];
                     const isLowAllowance = records.some(

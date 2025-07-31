@@ -106,7 +106,7 @@ function calculateDeductedDays(excessLateMinutes, checkIn) {
   return deductedDays;
 }
 
-// دالة لحساب ساعات العمل والساعات الإضافية (معدلة لتسجيل 9 ساعات عند بصمة واحدة)
+// دالة لحساب ساعات العمل والساعات الإضافية (معدلة لتسجيل 9 ساعات عند بصمة واحدة وتعديل حساب الجمعة)
 function calculateWorkHours(record, user, dailyRate, regularHourRate) {
   let workHours = 0;
   let extraHours = 0;
@@ -152,8 +152,8 @@ function calculateWorkHours(record, user, dailyRate, regularHourRate) {
         const isFriday = record.date.getDay() === 5;
         const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
         if (isFriday) {
-          workHours *= 2;
-          extraHours = workHours / 2;
+          // تعديل: إذا كان يوم جمعة، الساعات الإضافية = ساعات العمل × 2
+          extraHours = workHours * 2;
           extraHoursCompensation = extraHours * extraHourRate;
           calculatedWorkDays = 2;
           hoursDeduction = 0;
@@ -185,6 +185,10 @@ function calculateWorkHours(record, user, dailyRate, regularHourRate) {
       hoursDeduction = 0;
       calculatedWorkDays = 1;
       if ((user.shiftType === 'dayStation' || user.shiftType === 'nightStation') && record.date.getDay() === 5 && record.checkIn) {
+        // تعديل: إذا كان يوم جمعة وبصمة واحدة، الساعات الإضافية = 9 × 2
+        extraHours = NORMAL_WORK_HOURS * 2;
+        extraHoursCompensation = extraHours * (regularHourRate * 2);
+        calculatedWorkDays = 2;
         fridayBonus = dailyRate;
       }
     }
@@ -619,8 +623,8 @@ async function processAttendance(results, req, res) {
               const isFriday = date.getDay() === 5;
               const extraHourRate = isFriday ? regularHourRate * 2 : regularHourRate;
               if (isFriday) {
-                workHours *= 2;
-                extraHours = workHours / 2;
+                // تعديل: الساعات الإضافية = ساعات العمل × 2
+                extraHours = workHours * 2;
                 extraHoursCompensation = extraHours * extraHourRate;
                 calculatedWorkDays = 2;
                 hoursDeduction = 0;
@@ -645,6 +649,10 @@ async function processAttendance(results, req, res) {
               }
             }
           } else if ((user.shiftType === 'dayStation' || user.shiftType === 'nightStation') && date.getDay() === 5 && checkIn) {
+            // تعديل: إذا كان يوم جمعة وبصمة واحدة، الساعات الإضافية = 9 × 2
+            extraHours = NORMAL_WORK_HOURS * 2;
+            extraHoursCompensation = extraHours * (regularHourRate * 2);
+            calculatedWorkDays = 2;
             fridayBonus = dailyRate;
           }
         }
@@ -739,13 +747,13 @@ router.get('/', auth, async (req, res) => {
       map[user.code] = user;
       return map;
     }, {});
-    for (const employeeCode of [...new Set(records.map(r => r.employeeCode))]) {
-      const user = userMap[employeeCode];
+    for (const empCode of [...new Set(records.map(r => r.employeeCode))]) {
+      const user = userMap[empCode];
       if (!user) continue;
 
       let monthlyLateAllowance = user.monthlyLateAllowance || 120;
       const employeeRecords = records
-        .filter(r => r.employeeCode === employeeCode && r.shiftType === 'administrative')
+        .filter(r => r.employeeCode === empCode && r.shiftType === 'administrative')
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 
       for (let i = 0; i < employeeRecords.length; i++) {
@@ -766,7 +774,7 @@ router.get('/', auth, async (req, res) => {
       }
       // تحديث monthlyLateAllowance في نموذج User
       await User.updateOne(
-        { code: employeeCode },
+        { code: empCode },
         { $set: { monthlyLateAllowance: employeeRecords.length > 0 ? employeeRecords[employeeRecords.length - 1].monthlyLateAllowance : monthlyLateAllowance } }
       );
     }
@@ -1197,7 +1205,7 @@ router.post('/annual_leave', auth, async (req, res) => {
 
     for (const user of users) {
       const daysCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-      if (user.annualLeaveBalance < daysCount) {
+      if (!isMedicalLeave && user.annualLeaveBalance < daysCount) {
         return res.status(400).json({ message: `رصيد الإجازة السنوية غير كافٍ للموظف ${user.code}` });
       }
 
@@ -1252,7 +1260,7 @@ router.post('/annual_leave', auth, async (req, res) => {
             hoursDeduction: 0,
             fridayBonus: 0,
             annualLeaveBalance: user.annualLeaveBalance || 21,
-            monthlyLateAllowance: user.monthlyLateAllowance || 120,
+            monthlyLateAllowance: user.monthlyLeaveAllowance || 120,
             leaveCompensation: 0,
             medicalLeaveDeduction,
             createdBy: req.user.id,
@@ -1261,6 +1269,17 @@ router.post('/annual_leave', auth, async (req, res) => {
           await newRecord.save();
           console.log(`Created ${status} for ${user.code} on ${d.toISOString()}`);
         }
+      }
+
+      if (!isMedicalLeave) {
+        await User.updateOne(
+          { code: user.code },
+          { $inc: { annualLeaveBalance: -daysCount } }
+        );
+        await User.updateOne(
+          { code: user.code },
+          { $max: { annualLeaveBalance: 0 } }
+        );
       }
 
       await updateAllRecords(user.code, user, req);

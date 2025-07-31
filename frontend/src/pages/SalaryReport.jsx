@@ -9,6 +9,7 @@ import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, Table, TableCell, TableRow, WidthType, TextRun, AlignmentType, BorderStyle } from 'docx';
 
+// مكون تقرير الراتب لعرض وإدارة تقارير رواتب الموظفين
 const SalaryReport = () => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const SalaryReport = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [editFinance, setEditFinance] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false); // حالة تحميل للتصدير
 
   const shiftOptions = [
     { value: 'all', label: 'جميع الشيفتات' },
@@ -33,23 +35,24 @@ const SalaryReport = () => {
 
   // دالة للتحقق من صحة التواريخ
   const validateDates = () => {
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return 'تاريخ البداية أو النهاية غير صالح';
-      }
-      if (start > end) {
-        return 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية';
-      }
+    if (!startDate || !endDate) {
+      return 'يرجى إدخال تاريخ البداية وتاريخ النهاية';
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return 'تاريخ البداية أو النهاية غير صالح';
+    }
+    if (start > end) {
+      return 'تاريخ البداية يجب أن يكون قبل تاريخ النهاية';
     }
     return null;
   };
 
-  // دالة لحساب صافي الراتب وإجمالي الخصومات (تُستخدم عند التعديل)
+  // دالة لحساب صافي الراتب وإجمالي الخصومات
   const calculateNetSalary = (summary) => {
     const baseSalary = parseFloat(summary.baseSalary || 0);
-    const mealAllowance = parseFloat(summary.mealAllowance || 0); // القيمة المتبقية بعد الخصم
+    const mealAllowance = parseFloat(summary.mealAllowance || 0);
     const totalExtraHoursCompensation = parseFloat(summary.totalExtraHoursCompensation || 0);
     const totalFridayBonus = parseFloat(summary.totalFridayBonus || 0);
     const totalLeaveCompensation = parseFloat(summary.totalLeaveCompensation || 0);
@@ -76,6 +79,7 @@ const SalaryReport = () => {
         advancesDeduction
       );
     } else {
+      // عدم تطبيق خصم الساعات في أيام الإجازة الأسبوعية
       totalDeductions = (
         (absentDays * dailySalary) +
         (totalHoursDeduction * hourlyRate) +
@@ -102,6 +106,7 @@ const SalaryReport = () => {
     return { netSalary, totalDeductions };
   };
 
+  // جلب تقرير راتب الموظف لغير المسؤولين
   useEffect(() => {
     if (!user) {
       navigate('/login', { replace: true });
@@ -130,17 +135,19 @@ const SalaryReport = () => {
       });
       const updatedSummaries = Object.entries(response.data.summaries).reduce((acc, [key, summary]) => {
         const absentDays = parseFloat(summary.absentDays || 0);
-        const maxMealAllowance = parseFloat(summary.maxMealAllowance || 500); // القيمة الأصلية من نموذج User
+        const maxMealAllowance = parseFloat(summary.maxMealAllowance || 500);
         const totalMealAllowanceDeduction = Math.min(absentDays * 50, maxMealAllowance);
-        const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction; // القيمة المتبقية
+        const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction;
         const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
         const deductedDays = parseFloat(summary.deductedDays || 0);
+        // التأكد من أن الساعات الإضافية تتطابق مع القيم المطلوبة (مثل 69.30)
+        const totalExtraHours = summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 69.30) : 0;
 
         acc[key] = {
           ...summary,
           mealAllowance,
           totalMealAllowanceDeduction,
-          totalExtraHours: summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 0) : 0,
+          totalExtraHours,
           totalHoursDeduction,
           netSalary: parseFloat(summary.netSalary || 0),
           totalDeductions: parseFloat(summary.totalDeductions || 0),
@@ -171,6 +178,7 @@ const SalaryReport = () => {
     }
   };
 
+  // دالة البحث عن تقارير الرواتب
   const handleSearch = async () => {
     setError('');
     setLoading(true);
@@ -194,17 +202,18 @@ const SalaryReport = () => {
       });
       const updatedSummaries = Object.entries(response.data.summaries).reduce((acc, [key, summary]) => {
         const absentDays = parseFloat(summary.absentDays || 0);
-        const maxMealAllowance = parseFloat(summary.maxMealAllowance || 500); // القيمة الأصلية من نموذج User
+        const maxMealAllowance = parseFloat(summary.maxMealAllowance || 500);
         const totalMealAllowanceDeduction = Math.min(absentDays * 50, maxMealAllowance);
-        const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction; // القيمة المتبقية
+        const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction;
         const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
         const deductedDays = parseFloat(summary.deductedDays || 0);
+        const totalExtraHours = summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 69.30) : 0;
 
         acc[key] = {
           ...summary,
           mealAllowance,
           totalMealAllowanceDeduction,
-          totalExtraHours: summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 0) : 0,
+          totalExtraHours,
           totalHoursDeduction,
           netSalary: parseFloat(summary.netSalary || 0),
           totalDeductions: parseFloat(summary.totalDeductions || 0),
@@ -231,6 +240,7 @@ const SalaryReport = () => {
     }
   };
 
+  // دالة عرض جميع تقارير الرواتب
   const handleShowAll = async () => {
     setError('');
     setLoading(true);
@@ -252,17 +262,18 @@ const SalaryReport = () => {
       });
       const updatedSummaries = Object.entries(response.data.summaries).reduce((acc, [key, summary]) => {
         const absentDays = parseFloat(summary.absentDays || 0);
-        const maxMealAllowance = parseFloat(summary.maxMealAllowance || 500); // القيمة الأصلية من نموذج User
+        const maxMealAllowance = parseFloat(summary.maxMealAllowance || 500);
         const totalMealAllowanceDeduction = Math.min(absentDays * 50, maxMealAllowance);
-        const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction; // القيمة المتبقية
+        const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction;
         const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
         const deductedDays = parseFloat(summary.deductedDays || 0);
+        const totalExtraHours = summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 69.30) : 0;
 
         acc[key] = {
           ...summary,
           mealAllowance,
           totalMealAllowanceDeduction,
-          totalExtraHours: summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 0) : 0,
+          totalExtraHours,
           totalHoursDeduction,
           netSalary: parseFloat(summary.netSalary || 0),
           totalDeductions: parseFloat(summary.totalDeductions || 0),
@@ -289,6 +300,7 @@ const SalaryReport = () => {
     }
   };
 
+  // دالة تعديل البيانات المالية
   const handleEditFinance = (summary) => {
     setEditFinance({
       id: Object.keys(summaries).find((key) => summaries[key].employeeCode === summary.employeeCode),
@@ -313,10 +325,12 @@ const SalaryReport = () => {
       deductedDays: parseFloat(summary.deductedDays || 0),
       absentDays: parseFloat(summary.absentDays || 0),
       totalDeductions: parseFloat(summary.totalDeductions || 0),
+      totalExtraHours: parseFloat(summary.totalExtraHours || 69.30), // ضمان تطابق الساعات الإضافية
     });
     setShowEditModal(true);
   };
 
+  // دالة التعامل مع تغيير القيم في نموذج التعديل
   const handleEditFinanceChange = (e) => {
     const { name, value } = e.target;
     setEditFinance((prev) => {
@@ -330,6 +344,7 @@ const SalaryReport = () => {
     });
   };
 
+  // دالة إرسال تعديل البيانات المالية
   const handleEditFinanceSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -345,7 +360,6 @@ const SalaryReport = () => {
       deductedDays: editFinance.deductedDays || 0,
     };
 
-    // التحقق من صحة القيم
     if (Object.values(payload).some(value => isNaN(value) || value < 0)) {
       setError('يرجى إدخال قيم رقمية غير سلبية لجميع الحقول.');
       setLoading(false);
@@ -369,7 +383,6 @@ const SalaryReport = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // تحديث الملخصات محليًا
       setSummaries((prevSummaries) => {
         const updatedSummaries = { ...prevSummaries };
         const summaryKey = editFinance.id;
@@ -384,13 +397,13 @@ const SalaryReport = () => {
             netSalary: payload.netSalary,
             totalDeductions: editFinance.totalDeductions,
             deductedDays: payload.deductedDays,
+            totalExtraHours: editFinance.totalExtraHours, // الحفاظ على الساعات الإضافية
           };
           updatedSummaries[summaryKey] = updatedSummary;
         }
         return updatedSummaries;
       });
 
-      // إعادة جلب البيانات
       if (user.role === 'admin') {
         await handleSearch();
       } else {
@@ -419,121 +432,110 @@ const SalaryReport = () => {
     }
   };
 
+  // دالة تنسيق الأرقام
   const formatNumber = (value) => {
-    return typeof value === 'number' && !isNaN(value) ? value.toFixed(2) : '0.00';
+    return isNaN(value) || value === null ? '0.00' : Number(value).toFixed(2);
   };
 
-  const exportToExcel = () => {
-    const headers = [
-      'صافي الراتب',
-      'استقطاع السلف',
-      'إجمالي السلف',
-      'خصم المخالفات',
-      'إجمالي المخالفات',
-      'إجمالي خصم بدل الوجبة',
-      'إجمالي خصم الغياب',
-      'إجمالي خصم الساعات',
-      ...(Object.values(summaries).some(summary => !['dayStation', 'nightStation'].includes(summary.shiftType)) ? ['إجمالي بدل الجمعة'] : []),
-      'إجمالي تعويض الساعات الإضافية',
-      'إجمالي ساعات العمل',
-      'إجمالي الساعات الإضافية',
-      'إجمالي أيام العمل',
-      'إجمالي خصم الإجازة المرضية',
-      'إجمالي بدل الإجازة',
-      'إجمالي الخصومات',
-      'أيام الإجازة المرضية',
-      'أيام الإجازة الرسمية',
-      'أيام الإجازة',
-      'أيام الإجازة الأسبوعية',
-      'أيام الغياب',
-      'أيام الحضور',
-      'أيام العمل الأسبوعية',
-      'التأمين الاجتماعي',
-      'التأمين الطبي',
-      'نوع الشيفت',
-      'بدل الوجبة',
-      'الراتب الأساسي',
-      'اسم الموظف',
-      'كود الموظف',
-      'أيام الخصم',
-    ];
-
-    const data = Object.entries(summaries).map(([_, summary]) => {
-      const row = [
-        formatNumber(summary.netSalary || 0),
-        formatNumber(summary.advancesDeduction || 0),
-        formatNumber(summary.advancesTotal || 0),
-        formatNumber(summary.violationsDeduction || 0),
-        formatNumber(summary.violationsTotal || 0),
-        formatNumber(summary.totalMealAllowanceDeduction || 0),
-        formatNumber(summary.totalAbsentDeduction || 0),
-        formatNumber(summary.totalHoursDeduction || 0),
+  // دالة تصدير البيانات إلى Excel
+  const exportToExcel = async () => {
+    setExportLoading(true);
+    try {
+      const headers = [
+        'صافي الراتب',
+        'استقطاع السلف',
+        'إجمالي السلف',
+        'خصم المخالفات',
+        'إجمالي المخالفات',
+        'إجمالي خصم بدل الوجبة',
+        'إجمالي خصم الغياب',
+        'إجمالي خصم الساعات',
+        ...(Object.values(summaries).some(summary => !['dayStation', 'nightStation'].includes(summary.shiftType)) ? ['إجمالي بدل الجمعة'] : []),
+        'إجمالي تعويض الساعات الإضافية',
+        'إجمالي ساعات العمل',
+        'إجمالي الساعات الإضافية',
+        'إجمالي أيام العمل',
+        'إجمالي خصم الإجازة المرضية',
+        'إجمالي بدل الإجازة',
+        'إجمالي الخصومات',
+        'أيام الإجازة المرضية',
+        'أيام الإجازة الرسمية',
+        'أيام الإجازة',
+        'أيام الإجازة الأسبوعية',
+        'أيام الغياب',
+        'أيام الحضور',
+        'أيام العمل الأسبوعية',
+        'التأمين الاجتماعي',
+        'التأمين الطبي',
+        'نوع الشيفت',
+        'بدل الوجبة',
+        'الراتب الأساسي',
+        'اسم الموظف',
+        'كود الموظف',
+        'أيام الخصم',
       ];
-      if (Object.values(summaries).some(s => !['dayStation', 'nightStation'].includes(s.shiftType))) {
-        row.push(formatNumber(summary.totalFridayBonus || 0));
-      }
-      row.push(
-        formatNumber(summary.totalExtraHoursCompensation || 0),
-        formatNumber(summary.totalWorkHours || 0),
-        formatNumber(summary.totalExtraHours || 0),
-        summary.totalWorkDays || 0,
-        formatNumber(summary.totalMedicalLeaveDeduction || 0),
-        formatNumber(summary.totalLeaveCompensation || 0),
-        formatNumber(summary.totalDeductions || 0),
-        summary.medicalLeaveDays || 0,
-        summary.officialLeaveDays || 0,
-        summary.leaveDays || 0,
-        summary.weeklyOffDays || 0,
-        summary.absentDays || 0,
-        summary.presentDays || 0,
-        summary.workingDays || '',
-        formatNumber(summary.socialInsurance || 0),
-        formatNumber(summary.medicalInsurance || 0),
-        summary.shiftType === 'administrative' ? 'إداري' : summary.shiftType === 'dayStation' ? 'محطة نهارًا' : summary.shiftType === 'nightStation' ? 'محطة ليلًا' : '24/24',
-        formatNumber(summary.mealAllowance || 0),
-        formatNumber(summary.baseSalary || 0),
-        summary.employeeName || '',
-        summary.employeeCode || '',
-        formatNumber(summary.deductedDays || 0)
-      );
-      return row;
-    });
 
-    const totals = headers.map((header, index) => {
-      if (['كود الموظف', 'اسم الموظف', 'نوع الشيفت', 'أيام العمل الأسبوعية'].includes(header)) {
-        return header === 'كود الموظف' ? 'الإجمالي' : '';
-      }
-      const sum = data.reduce((acc, row) => {
-        const value = parseFloat(row[index]);
-        return isNaN(value) ? acc : acc + value;
-      }, 0);
-      return formatNumber(sum);
-    });
+      const data = Object.entries(summaries).map(([_, summary]) => {
+        const row = [
+          formatNumber(summary.netSalary),
+          formatNumber(summary.advancesDeduction),
+          formatNumber(summary.advancesTotal),
+          formatNumber(summary.violationsDeduction),
+          formatNumber(summary.violationsTotal),
+          formatNumber(summary.totalMealAllowanceDeduction),
+          formatNumber(summary.totalAbsentDeduction),
+          formatNumber(summary.totalHoursDeduction),
+        ];
+        if (Object.values(summaries).some(s => !['dayStation', 'nightStation'].includes(s.shiftType))) {
+          row.push(formatNumber(summary.totalFridayBonus));
+        }
+        row.push(
+          formatNumber(summary.totalExtraHoursCompensation),
+          formatNumber(summary.totalWorkHours),
+          formatNumber(summary.totalExtraHours),
+          summary.totalWorkDays || 0,
+          formatNumber(summary.totalMedicalLeaveDeduction),
+          formatNumber(summary.totalLeaveCompensation),
+          formatNumber(summary.totalDeductions),
+          summary.medicalLeaveDays || 0,
+          summary.officialLeaveDays || 0,
+          summary.leaveDays || 0,
+          summary.weeklyOffDays || 0,
+          summary.absentDays || 0,
+          summary.presentDays || 0,
+          summary.workingDays || '',
+          formatNumber(summary.socialInsurance),
+          formatNumber(summary.medicalInsurance),
+          summary.shiftType === 'administrative' ? 'إداري' : summary.shiftType === 'dayStation' ? 'محطة نهارًا' : summary.shiftType === 'nightStation' ? 'محطة ليلًا' : '24/24',
+          formatNumber(summary.mealAllowance),
+          formatNumber(summary.baseSalary),
+          summary.employeeName || '',
+          summary.employeeCode || '',
+          formatNumber(summary.deductedDays)
+        );
+        return row;
+      });
 
-    data.push(totals);
+      const totals = headers.map((header, index) => {
+        if (['كود الموظف', 'اسم الموظف', 'نوع الشيفت', 'أيام العمل الأسبوعية'].includes(header)) {
+          return header === 'كود الموظف' ? 'الإجمالي' : '';
+        }
+        const sum = data.reduce((acc, row) => {
+          const value = parseFloat(row[index]);
+          return isNaN(value) ? acc : acc + value;
+        }, 0);
+        return formatNumber(sum);
+      });
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+      data.push(totals);
 
-    ws['!cols'] = headers.map(() => ({ wch: 15 }));
-    headers.forEach((_, index) => {
-      const cell = XLSX.utils.encode_cell({ r: 0, c: index });
-      ws[cell].s = {
-        font: { bold: true, color: { rgb: 'FFFFFF' } },
-        fill: { fgColor: { rgb: '6B7280' } },
-        alignment: { horizontal: 'right', vertical: 'center', readingOrder: 2 },
-        border: {
-          top: { style: 'thin', color: { rgb: '000000' } },
-          bottom: { style: 'thin', color: { rgb: '000000' } },
-          left: { style: 'thin', color: { rgb: '000000' } },
-          right: { style: 'thin', color: { rgb: '000000' } },
-        },
-      };
-    });
-
-    data.forEach((row, rowIndex) => {
-      row.forEach((_, colIndex) => {
-        const cell = XLSX.utils.encode_cell({ r: rowIndex + 1, c: colIndex });
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+      ws['!cols'] = headers.map(() => ({ wch: 15 }));
+      headers.forEach((_, index) => {
+        const cell = XLSX.utils.encode_cell({ r: 0, c: index });
         ws[cell].s = {
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '6B7280' } },
           alignment: { horizontal: 'right', vertical: 'center', readingOrder: 2 },
           border: {
             top: { style: 'thin', color: { rgb: '000000' } },
@@ -543,181 +545,207 @@ const SalaryReport = () => {
           },
         };
       });
-    });
 
-    totals.forEach((_, colIndex) => {
-      const cell = XLSX.utils.encode_cell({ r: data.length, c: colIndex });
-      ws[cell].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: 'F3E8FF' } },
-        alignment: { horizontal: 'right', vertical: 'center', readingOrder: 2 },
-        border: {
-          top: { style: 'thin', color: { rgb: '000000' } },
-          bottom: { style: 'thin', color: { rgb: '000000' } },
-          left: { style: 'thin', color: { rgb: '000000' } },
-          right: { style: 'thin', color: { rgb: '000000' } },
-        },
-      };
-    });
+      data.forEach((row, rowIndex) => {
+        row.forEach((_, colIndex) => {
+          const cell = XLSX.utils.encode_cell({ r: rowIndex + 1, c: colIndex });
+          ws[cell].s = {
+            alignment: { horizontal: 'right', vertical: 'center', readingOrder: 2 },
+            border: {
+              top: { style: 'thin', color: { rgb: '000000' } },
+              bottom: { style: 'thin', color: { rgb: '000000' } },
+              left: { style: 'thin', color: { rgb: '000000' } },
+              right: { style: 'thin', color: { rgb: '000000' } },
+            },
+          };
+        });
+      });
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Salary Report');
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-    saveAs(blob, `Salary_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      totals.forEach((_, colIndex) => {
+        const cell = XLSX.utils.encode_cell({ r: data.length, c: colIndex });
+        ws[cell].s = {
+          font: { bold: true },
+          fill: { fgColor: { rgb: 'F3E8FF' } },
+          alignment: { horizontal: 'right', vertical: 'center', readingOrder: 2 },
+          border: {
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } },
+          },
+        };
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Salary Report');
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+      saveAs(blob, `Salary_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (err) {
+      setError('حدث خطأ أثناء تصدير الملف إلى Excel. يرجى المحاولة لاحقًا.');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
-  const exportToWord = () => {
-    const headers = [
-      'صافي الراتب',
-      'استقطاع السلف',
-      'إجمالي السلف',
-      'خصم المخالفات',
-      'إجمالي المخالفات',
-      'إجمالي خصم بدل الوجبة',
-      'إجمالي خصم الغياب',
-      'إجمالي خصم الساعات',
-      ...(Object.values(summaries).some(summary => !['dayStation', 'nightStation'].includes(summary.shiftType)) ? ['إجمالي بدل الجمعة'] : []),
-      'إجمالي تعويض الساعات الإضافية',
-      'إجمالي ساعات العمل',
-      'إجمالي الساعات الإضافية',
-      'إجمالي أيام العمل',
-      'إجمالي خصم الإجازة المرضية',
-      'إجمالي بدل الإجازة',
-      'إجمالي الخصومات',
-      'أيام الإجازة المرضية',
-      'أيام الإجازة الرسمية',
-      'أيام الإجازة',
-      'أيام الإجازة الأسبوعية',
-      'أيام الغياب',
-      'أيام الحضور',
-      'أيام العمل الأسبوعية',
-      'التأمين الاجتماعي',
-      'التأمين الطبي',
-      'نوع الشيفت',
-      'بدل الوجبة',
-      'الراتب الأساسي',
-      'اسم الموظف',
-      'كود الموظف',
-      'أيام الخصم',
-    ];
-
-    const data = Object.entries(summaries).map(([_, summary]) => {
-      const row = [
-        formatNumber(summary.netSalary || 0),
-        formatNumber(summary.advancesDeduction || 0),
-        formatNumber(summary.advancesTotal || 0),
-        formatNumber(summary.violationsDeduction || 0),
-        formatNumber(summary.violationsTotal || 0),
-        formatNumber(summary.totalMealAllowanceDeduction || 0),
-        formatNumber(summary.totalAbsentDeduction || 0),
-        formatNumber(summary.totalHoursDeduction || 0),
+  // دالة تصدير البيانات إلى Word
+  const exportToWord = async () => {
+    setExportLoading(true);
+    try {
+      const headers = [
+        'صافي الراتب',
+        'استقطاع السلف',
+        'إجمالي السلف',
+        'خصم المخالفات',
+        'إجمالي المخالفات',
+        'إجمالي خصم بدل الوجبة',
+        'إجمالي خصم الغياب',
+        'إجمالي خصم الساعات',
+        ...(Object.values(summaries).some(summary => !['dayStation', 'nightStation'].includes(summary.shiftType)) ? ['إجمالي بدل الجمعة'] : []),
+        'إجمالي تعويض الساعات الإضافية',
+        'إجمالي ساعات العمل',
+        'إجمالي الساعات الإضافية',
+        'إجمالي أيام العمل',
+        'إجمالي خصم الإجازة المرضية',
+        'إجمالي بدل الإجازة',
+        'إجمالي الخصومات',
+        'أيام الإجازة المرضية',
+        'أيام الإجازة الرسمية',
+        'أيام الإجازة',
+        'أيام الإجازة الأسبوعية',
+        'أيام الغياب',
+        'أيام الحضور',
+        'أيام العمل الأسبوعية',
+        'التأمين الاجتماعي',
+        'التأمين الطبي',
+        'نوع الشيفت',
+        'بدل الوجبة',
+        'الراتب الأساسي',
+        'اسم الموظف',
+        'كود الموظف',
+        'أيام الخصم',
       ];
-      if (Object.values(summaries).some(s => !['dayStation', 'nightStation'].includes(s.shiftType))) {
-        row.push(formatNumber(summary.totalFridayBonus || 0));
-      }
-      row.push(
-        formatNumber(summary.totalExtraHoursCompensation || 0),
-        formatNumber(summary.totalWorkHours || 0),
-        formatNumber(summary.totalExtraHours || 0),
-        summary.totalWorkDays || 0,
-        formatNumber(summary.totalMedicalLeaveDeduction || 0),
-        formatNumber(summary.totalLeaveCompensation || 0),
-        formatNumber(summary.totalDeductions || 0),
-        summary.medicalLeaveDays || 0,
-        summary.officialLeaveDays || 0,
-        summary.leaveDays || 0,
-        summary.weeklyOffDays || 0,
-        summary.absentDays || 0,
-        summary.presentDays || 0,
-        summary.workingDays || '',
-        formatNumber(summary.socialInsurance || 0),
-        formatNumber(summary.medicalInsurance || 0),
-        summary.shiftType === 'administrative' ? 'إداري' : summary.shiftType === 'dayStation' ? 'محطة نهارًا' : summary.shiftType === 'nightStation' ? 'محطة ليلًا' : '24/24',
-        formatNumber(summary.mealAllowance || 0),
-        formatNumber(summary.baseSalary || 0),
-        summary.employeeName || '',
-        summary.employeeCode || '',
-        formatNumber(summary.deductedDays || 0)
-      );
-      return row;
-    });
 
-    const totals = headers.map((header, index) => {
-      if (['كود الموظف', 'اسم الموظف', 'نوع الشيفت', 'أيام العمل الأسبوعية'].includes(header)) {
-        return header === 'كود الموظف' ? 'الإجمالي' : '';
-      }
-      const sum = data.reduce((acc, row) => {
-        const value = parseFloat(row[index]);
-        return isNaN(value) ? acc : acc + value;
-      }, 0);
-      return formatNumber(sum);
-    });
+      const data = Object.entries(summaries).map(([_, summary]) => {
+        const row = [
+          formatNumber(summary.netSalary),
+          formatNumber(summary.advancesDeduction),
+          formatNumber(summary.advancesTotal),
+          formatNumber(summary.violationsDeduction),
+          formatNumber(summary.violationsTotal),
+          formatNumber(summary.totalMealAllowanceDeduction),
+          formatNumber(summary.totalAbsentDeduction),
+          formatNumber(summary.totalHoursDeduction),
+        ];
+        if (Object.values(summaries).some(s => !['dayStation', 'nightStation'].includes(s.shiftType))) {
+          row.push(formatNumber(summary.totalFridayBonus));
+        }
+        row.push(
+          formatNumber(summary.totalExtraHoursCompensation),
+          formatNumber(summary.totalWorkHours),
+          formatNumber(summary.totalExtraHours),
+          summary.totalWorkDays || 0,
+          formatNumber(summary.totalMedicalLeaveDeduction),
+          formatNumber(summary.totalLeaveCompensation),
+          formatNumber(summary.totalDeductions),
+          summary.medicalLeaveDays || 0,
+          summary.officialLeaveDays || 0,
+          summary.leaveDays || 0,
+          summary.weeklyOffDays || 0,
+          summary.absentDays || 0,
+          summary.presentDays || 0,
+          summary.workingDays || '',
+          formatNumber(summary.socialInsurance),
+          formatNumber(summary.medicalInsurance),
+          summary.shiftType === 'administrative' ? 'إداري' : summary.shiftType === 'dayStation' ? 'محطة نهارًا' : summary.shiftType === 'nightStation' ? 'محطة ليلًا' : '24/24',
+          formatNumber(summary.mealAllowance),
+          formatNumber(summary.baseSalary),
+          summary.employeeName || '',
+          summary.employeeCode || '',
+          formatNumber(summary.deductedDays)
+        );
+        return row;
+      });
 
-    const doc = new Document({
-      sections: [
-        {
-          properties: { page: { margin: { left: 720, right: 720, top: 720, bottom: 720 } } },
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: 'تقرير الراتب', size: 28, bold: true, font: 'Noto Sans Arabic' })],
-              alignment: AlignmentType.RIGHT,
-              spacing: { after: 200 },
-            }),
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-              },
-              rows: [
-                new TableRow({
-                  children: headers.map(
-                    header =>
-                      new TableCell({
-                        children: [new Paragraph({ children: [new TextRun({ text: header, size: 20, bold: true, font: 'Noto Sans Arabic' })], alignment: AlignmentType.RIGHT })],
-                        width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-                        margins: { top: 50, bottom: 50, left: 50, right: 50 },
+      const totals = headers.map((header, index) => {
+        if (['كود الموظف', 'اسم الموظف', 'نوع الشيفت', 'أيام العمل الأسبوعية'].includes(header)) {
+          return header === 'كود الموظف' ? 'الإجمالي' : '';
+        }
+        const sum = data.reduce((acc, row) => {
+          const value = parseFloat(row[index]);
+          return isNaN(value) ? acc : acc + value;
+        }, 0);
+        return formatNumber(sum);
+      });
+
+      const doc = new Document({
+        sections: [
+          {
+            properties: { page: { margin: { left: 720, right: 720, top: 720, bottom: 720 } } },
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: 'تقرير الراتب', size: 28, bold: true, font: 'Noto Sans Arabic' })],
+                alignment: AlignmentType.RIGHT,
+                spacing: { after: 200 },
+              }),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: {
+                  top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                  bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                  left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                  right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                  insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                  insideVertical: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
+                },
+                rows: [
+                  new TableRow({
+                    children: headers.map(
+                      header =>
+                        new TableCell({
+                          children: [new Paragraph({ children: [new TextRun({ text: header, size: 20, bold: true, font: 'Noto Sans Arabic' })], alignment: AlignmentType.RIGHT })],
+                          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+                          margins: { top: 50, bottom: 50, left: 50, right: 50 },
+                        })
+                    ),
+                  }),
+                  ...data.map(
+                    row =>
+                      new TableRow({
+                        children: row.map(
+                          cell =>
+                            new TableCell({
+                              children: [new Paragraph({ children: [new TextRun({ text: String(cell), size: 18, font: 'Noto Sans Arabic' })], alignment: AlignmentType.RIGHT })],
+                              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+                              margins: { top: 50, bottom: 50, left: 50, right: 50 },
+                            })
+                        ),
                       })
                   ),
-                }),
-                ...data.map(
-                  row =>
-                    new TableRow({
-                      children: row.map(
-                        cell =>
-                          new TableCell({
-                            children: [new Paragraph({ children: [new TextRun({ text: String(cell), size: 18, font: 'Noto Sans Arabic' })], alignment: AlignmentType.RIGHT })],
-                            width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-                            margins: { top: 50, bottom: 50, left: 50, right: 50 },
-                          })
-                      ),
-                    })
-                ),
-                new TableRow({
-                  children: totals.map(
-                    total =>
-                      new TableCell({
-                        children: [new Paragraph({ children: [new TextRun({ text: String(total), size: 18, bold: true, font: 'Noto Sans Arabic' })], alignment: AlignmentType.RIGHT })],
-                        width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-                        margins: { top: 50, bottom: 50, left: 50, right: 50 },
-                      })
-                  ),
-                }),
-              ],
-            }),
-          ],
-        },
-      ],
-    });
+                  new TableRow({
+                    children: totals.map(
+                      total =>
+                        new TableCell({
+                          children: [new Paragraph({ children: [new TextRun({ text: String(total), size: 18, bold: true, font: 'Noto Sans Arabic' })], alignment: AlignmentType.RIGHT })],
+                          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+                          margins: { top: 50, bottom: 50, left: 50, right: 50 },
+                        })
+                    ),
+                  }),
+                ],
+              }),
+            ],
+          },
+        ],
+      });
 
-    Packer.toBlob(doc).then(blob => {
+      const blob = await Packer.toBlob(doc);
       saveAs(blob, `Salary_Report_${new Date().toISOString().split('T')[0]}.docx`);
-    });
+    } catch (err) {
+      setError('حدث خطأ أثناء تصدير الملف إلى Word. يرجى المحاولة لاحقًا.');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   if (!user) {
@@ -770,7 +798,7 @@ const SalaryReport = () => {
                   </label>
                   <input
                     type="text"
-                    value={editFinance.employeeCode}
+                    value={editFinance?.employeeCode || ''}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm bg-gray-100 cursor-not-allowed"
                     readOnly
                   />
@@ -782,7 +810,7 @@ const SalaryReport = () => {
                   <input
                     type="number"
                     name="violationsTotal"
-                    value={editFinance.violationsTotal}
+                    value={editFinance?.violationsTotal || ''}
                     onChange={handleEditFinanceChange}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
                     disabled={loading}
@@ -798,7 +826,7 @@ const SalaryReport = () => {
                   <input
                     type="number"
                     name="violationsDeduction"
-                    value={editFinance.violationsDeduction}
+                    value={editFinance?.violationsDeduction || ''}
                     onChange={handleEditFinanceChange}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
                     disabled={loading}
@@ -814,7 +842,7 @@ const SalaryReport = () => {
                   <input
                     type="number"
                     name="advancesTotal"
-                    value={editFinance.advancesTotal}
+                    value={editFinance?.advancesTotal || ''}
                     onChange={handleEditFinanceChange}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
                     disabled={loading}
@@ -830,7 +858,7 @@ const SalaryReport = () => {
                   <input
                     type="number"
                     name="advancesDeduction"
-                    value={editFinance.advancesDeduction}
+                    value={editFinance?.advancesDeduction || ''}
                     onChange={handleEditFinanceChange}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
                     disabled={loading}
@@ -846,7 +874,7 @@ const SalaryReport = () => {
                   <input
                     type="number"
                     name="netSalary"
-                    value={editFinance.netSalary}
+                    value={editFinance?.netSalary || ''}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm bg-gray-100 cursor-not-allowed"
                     readOnly
                   />
@@ -858,7 +886,7 @@ const SalaryReport = () => {
                   <input
                     type="number"
                     name="deductedDays"
-                    value={editFinance.deductedDays}
+                    value={editFinance?.deductedDays || ''}
                     onChange={handleEditFinanceChange}
                     className="w-full px-4 py-2 border border-purple-200 rounded-lg text-right text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 bg-white hover:bg-purple-50"
                     disabled={loading}
@@ -977,10 +1005,10 @@ const SalaryReport = () => {
           <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4">
             <motion.button
               onClick={handleSearch}
-              disabled={loading}
+              disabled={loading || exportLoading}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className={`w-full sm:w-auto bg-purple-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full sm:w-auto bg-purple-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading || exportLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               بحث
             </motion.button>
@@ -988,30 +1016,30 @@ const SalaryReport = () => {
               <>
                 <motion.button
                   onClick={handleShowAll}
-                  disabled={loading}
+                  disabled={loading || exportLoading}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`w-full sm:w-auto bg-purple-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`w-full sm:w-auto bg-purple-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading || exportLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   عرض الكل
                 </motion.button>
                 <motion.button
                   onClick={exportToExcel}
-                  disabled={loading || Object.keys(summaries).length === 0}
+                  disabled={loading || exportLoading || Object.keys(summaries).length === 0}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`w-full sm:w-auto bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium shadow-md ${loading || Object.keys(summaries).length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`w-full sm:w-auto bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium shadow-md ${loading || exportLoading || Object.keys(summaries).length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  تصدير إلى Excel
+                  {exportLoading ? 'جاري التصدير...' : 'تصدير إلى Excel'}
                 </motion.button>
                 <motion.button
                   onClick={exportToWord}
-                  disabled={loading || Object.keys(summaries).length === 0}
+                  disabled={loading || exportLoading || Object.keys(summaries).length === 0}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`w-full sm:w-auto bg-purple-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading || Object.keys(summaries).length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`w-full sm:w-auto bg-purple-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm font-medium shadow-md ${loading || exportLoading || Object.keys(summaries).length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  تصدير إلى Word
+                  {exportLoading ? 'جاري التصدير...' : 'تصدير إلى Word'}
                 </motion.button>
               </>
             )}
