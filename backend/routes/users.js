@@ -685,13 +685,18 @@ router.get('/salary-report', auth, async (req, res) => {
         let totalDeductions;
         let totalDeductionsAmount;
         if (user.shiftType === 'administrative') {
+          // حساب خصم الغياب وأيام الخصم بناءً على الراتب الأساسي مقسومًا على 30
+          const absenceDeduction = absentDays * dailySalary;
+          const deductedDaysDeduction = totalDeductedDaysFromAttendance * dailySalary;
           totalDeductions = absentDays + totalDeductedDaysFromAttendance;
           totalDeductionsAmount =
-            (totalDeductions * dailySalary) +
+            absenceDeduction +
+            deductedDaysDeduction +
             (totalHoursDeduction * hourlyRate) +
             parseFloat(user.medicalInsurance || 0) +
             parseFloat(user.socialInsurance || 0) +
             totalMealAllowanceDeduction +
+            totalMedicalLeaveDeduction +
             parseFloat(user.violationsDeduction || 0) +
             parseFloat(user.advancesDeduction || 0);
         } else {
