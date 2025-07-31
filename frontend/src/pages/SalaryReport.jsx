@@ -59,7 +59,7 @@ const SalaryReport = () => {
     const absentDays = parseFloat(summary.absentDays || 0);
     const deductedDays = parseFloat(summary.deductedDays || 0);
     const totalMealAllowanceDeduction = parseFloat(summary.totalMealAllowanceDeduction || 0);
-    const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
+    const totalHoursDeduction = parseFloat(summary.totalHoursDeduction || 0);
     const totalMedicalLeaveDeduction = parseFloat(summary.totalMedicalLeaveDeduction || 0);
     const medicalInsurance = parseFloat(summary.medicalInsurance || 0);
     const socialInsurance = parseFloat(summary.socialInsurance || 0);
@@ -71,18 +71,19 @@ const SalaryReport = () => {
     let totalDeductions;
     if (summary.shiftType === 'administrative') {
       totalDeductions = (
-        (absentDays + deductedDays) * dailySalary +
-        medicalInsurance +
-        socialInsurance +
-        totalMealAllowanceDeduction +
-        violationsDeduction +
-        advancesDeduction
+        (absentDays * dailySalary) + // خصم الغياب
+        (deductedDays * dailySalary) + // خصم أيام الخصم
+        totalMedicalLeaveDeduction + // خصم الإجازة المرضية
+        totalMealAllowanceDeduction + // خصم بدل الوجبة
+        medicalInsurance + // التأمين الطبي
+        socialInsurance + // التأمين الاجتماعي
+        violationsDeduction + // خصم المخالفات
+        advancesDeduction // استقطاع السلف
       );
     } else {
-      // عدم تطبيق خصم الساعات في أيام الإجازة الأسبوعية
       totalDeductions = (
         (absentDays * dailySalary) +
-        (totalHoursDeduction * hourlyRate) +
+        (totalHoursDeduction * hourlyRate) + // خصم الساعات للشيفتات غير الإدارية
         totalMedicalLeaveDeduction +
         totalMealAllowanceDeduction +
         medicalInsurance +
@@ -103,7 +104,7 @@ const SalaryReport = () => {
 
     netSalary = netSalary < 0 ? 0 : netSalary;
 
-    return { netSalary, totalDeductions };
+    return { netSalary: parseFloat(netSalary.toFixed(2)), totalDeductions: parseFloat(totalDeductions.toFixed(2)) };
   };
 
   // جلب تقرير راتب الموظف لغير المسؤولين
@@ -140,19 +141,23 @@ const SalaryReport = () => {
         const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction;
         const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
         const deductedDays = parseFloat(summary.deductedDays || 0);
-        // التأكد من أن الساعات الإضافية تتطابق مع القيم المطلوبة (مثل 69.30)
-        const totalExtraHours = summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 69.30) : 0;
+        const { netSalary, totalDeductions } = calculateNetSalary({
+          ...summary,
+          mealAllowance,
+          totalMealAllowanceDeduction,
+          totalHoursDeduction,
+          deductedDays,
+        });
 
         acc[key] = {
           ...summary,
           mealAllowance,
           totalMealAllowanceDeduction,
-          totalExtraHours,
           totalHoursDeduction,
-          netSalary: parseFloat(summary.netSalary || 0),
-          totalDeductions: parseFloat(summary.totalDeductions || 0),
+          netSalary,
+          totalDeductions,
           deductedDays,
-          totalAbsentDeduction: summary.shiftType === 'administrative' ? parseFloat(summary.totalAbsentDeduction || 0) : (absentDays * (parseFloat(summary.baseSalary || 0) / 30)),
+          totalAbsentDeduction: absentDays * (parseFloat(summary.baseSalary || 0) / 30),
         };
         return acc;
       }, {});
@@ -207,18 +212,23 @@ const SalaryReport = () => {
         const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction;
         const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
         const deductedDays = parseFloat(summary.deductedDays || 0);
-        const totalExtraHours = summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 69.30) : 0;
+        const { netSalary, totalDeductions } = calculateNetSalary({
+          ...summary,
+          mealAllowance,
+          totalMealAllowanceDeduction,
+          totalHoursDeduction,
+          deductedDays,
+        });
 
         acc[key] = {
           ...summary,
           mealAllowance,
           totalMealAllowanceDeduction,
-          totalExtraHours,
           totalHoursDeduction,
-          netSalary: parseFloat(summary.netSalary || 0),
-          totalDeductions: parseFloat(summary.totalDeductions || 0),
+          netSalary,
+          totalDeductions,
           deductedDays,
-          totalAbsentDeduction: summary.shiftType === 'administrative' ? parseFloat(summary.totalAbsentDeduction || 0) : (absentDays * (parseFloat(summary.baseSalary || 0) / 30)),
+          totalAbsentDeduction: absentDays * (parseFloat(summary.baseSalary || 0) / 30),
         };
         return acc;
       }, {});
@@ -267,18 +277,23 @@ const SalaryReport = () => {
         const mealAllowance = maxMealAllowance - totalMealAllowanceDeduction;
         const totalHoursDeduction = summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0);
         const deductedDays = parseFloat(summary.deductedDays || 0);
-        const totalExtraHours = summary.shiftType === 'administrative' ? parseFloat(summary.totalExtraHours || 69.30) : 0;
+        const { netSalary, totalDeductions } = calculateNetSalary({
+          ...summary,
+          mealAllowance,
+          totalMealAllowanceDeduction,
+          totalHoursDeduction,
+          deductedDays,
+        });
 
         acc[key] = {
           ...summary,
           mealAllowance,
           totalMealAllowanceDeduction,
-          totalExtraHours,
           totalHoursDeduction,
-          netSalary: parseFloat(summary.netSalary || 0),
-          totalDeductions: parseFloat(summary.totalDeductions || 0),
+          netSalary,
+          totalDeductions,
           deductedDays,
-          totalAbsentDeduction: summary.shiftType === 'administrative' ? parseFloat(summary.totalAbsentDeduction || 0) : (absentDays * (parseFloat(summary.baseSalary || 0) / 30)),
+          totalAbsentDeduction: absentDays * (parseFloat(summary.baseSalary || 0) / 30),
         };
         return acc;
       }, {});
@@ -302,6 +317,7 @@ const SalaryReport = () => {
 
   // دالة تعديل البيانات المالية
   const handleEditFinance = (summary) => {
+    const { netSalary, totalDeductions } = calculateNetSalary(summary);
     setEditFinance({
       id: Object.keys(summaries).find((key) => summaries[key].employeeCode === summary.employeeCode),
       employeeCode: summary.employeeCode,
@@ -309,14 +325,14 @@ const SalaryReport = () => {
       violationsDeduction: parseFloat(summary.violationsDeduction || 0),
       advancesTotal: parseFloat(summary.advancesTotal || 0),
       advancesDeduction: parseFloat(summary.advancesDeduction || 0),
-      netSalary: parseFloat(summary.netSalary || 0),
+      netSalary,
       baseSalary: parseFloat(summary.baseSalary || 0),
       mealAllowance: parseFloat(summary.mealAllowance || 0),
       totalExtraHoursCompensation: parseFloat(summary.totalExtraHoursCompensation || 0),
       totalFridayBonus: parseFloat(summary.totalFridayBonus || 0),
       totalLeaveCompensation: parseFloat(summary.totalLeaveCompensation || 0),
       totalAbsentDeduction: parseFloat(summary.totalAbsentDeduction || 0),
-      totalHoursDeduction: parseFloat(summary.totalHoursDeduction || 0),
+      totalHoursDeduction: summary.shiftType === 'administrative' ? 0 : parseFloat(summary.totalHoursDeduction || 0),
       totalMedicalLeaveDeduction: parseFloat(summary.totalMedicalLeaveDeduction || 0),
       totalMealAllowanceDeduction: parseFloat(summary.totalMealAllowanceDeduction || 0),
       medicalInsurance: parseFloat(summary.medicalInsurance || 0),
@@ -324,8 +340,7 @@ const SalaryReport = () => {
       shiftType: summary.shiftType || 'administrative',
       deductedDays: parseFloat(summary.deductedDays || 0),
       absentDays: parseFloat(summary.absentDays || 0),
-      totalDeductions: parseFloat(summary.totalDeductions || 0),
-      totalExtraHours: parseFloat(summary.totalExtraHours || 69.30), // ضمان تطابق الساعات الإضافية
+      totalDeductions,
     });
     setShowEditModal(true);
   };
@@ -397,7 +412,6 @@ const SalaryReport = () => {
             netSalary: payload.netSalary,
             totalDeductions: editFinance.totalDeductions,
             deductedDays: payload.deductedDays,
-            totalExtraHours: editFinance.totalExtraHours, // الحفاظ على الساعات الإضافية
           };
           updatedSummaries[summaryKey] = updatedSummary;
         }
